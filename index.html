@@ -1252,6 +1252,7 @@ input, select, textarea, button { font-family: var(--font); }
             <div class="tab" onclick="switchAdminTab('depotsAdmin')">Depolar</div>
             <div class="tab" onclick="switchAdminTab('facilitiesAdmin')">Tesisler</div>
             <div class="tab" onclick="switchAdminTab('productsAdmin')">Ürün Türleri</div>
+            <div class="tab" onclick="switchAdminTab('backup')" style="color:var(--accent);">💾 Yedekleme</div>
           </div>
           <div id="adminTabContent"></div>
         </div>
@@ -1467,13 +1468,25 @@ const FIRMA = {
 function pdfBaslik() {
   return `<div style="border-bottom:3px solid #1B2A4A;padding-bottom:14px;margin-bottom:14px;">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;">
-      <div>
-        <div style="font-size:18px;font-weight:800;color:#1B2A4A;letter-spacing:0.5px;">${FIRMA.adKisa}</div>
-        <div style="font-size:9px;color:#555;margin-top:2px;">${FIRMA.ad}</div>
-        <div style="font-size:9px;color:#777;margin-top:4px;max-width:300px;line-height:1.4;">${FIRMA.adres}</div>
+      <div style="display:flex;align-items:center;gap:14px;">
+        <div style="width:60px;height:60px;background:linear-gradient(135deg,#1B2A4A,#2C3E6B);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg viewBox="0 0 40 40" width="36" height="36" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="20" cy="14" r="8" fill="none" stroke="#8DC63F" stroke-width="2.5"/>
+            <path d="M10 28 C10 22,30 22,30 28" fill="none" stroke="#8DC63F" stroke-width="2.5"/>
+            <path d="M16 14 L20 10 L24 14" fill="none" stroke="#fff" stroke-width="1.5"/>
+            <circle cx="20" cy="16" r="2" fill="#8DC63F"/>
+            <path d="M6 34 L34 34" stroke="#8DC63F" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-size:16px;font-weight:800;color:#1B2A4A;letter-spacing:0.5px;">EKOSA ÇEVRE ÇÖZÜMLERİ</div>
+          <div style="font-size:8px;color:#777;margin-top:1px;">GIDA HAY. SAN. TİC. LTD. ŞTİ.</div>
+          <div style="font-size:8px;color:#999;margin-top:3px;max-width:280px;line-height:1.4;">Aktoprak Mücavir Mevkii Karadeniz Sk. 132 Blok A No:1-2 Dinar / Afyonkarahisar</div>
+        </div>
       </div>
-      <div style="text-align:right;font-size:9px;color:#555;line-height:1.6;">
-        <div><strong>VKN:</strong> ${FIRMA.vkn} — ${FIRMA.vd}</div>
+      <div style="text-align:right;font-size:8.5px;color:#555;line-height:1.7;">
+        <div><strong>VKN:</strong> ${FIRMA.vkn}</div>
+        <div><strong>V.D:</strong> ${FIRMA.vd}</div>
         <div><strong>Lisans:</strong> ${FIRMA.lisans}</div>
         <div>📞 ${FIRMA.tel}</div>
         <div>✉️ ${FIRMA.email}</div>
@@ -1685,19 +1698,23 @@ async function syncToFirestore() {
   if(!isFirebaseReady) return;
   try {
     const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
-      'urgentRequests','notes','licenses','depots','facilities','cities','depotExits','depotEntries','cariTransactions'];
+      'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions'];
     for(const col of collections) {
       if(APP.data[col] && Array.isArray(APP.data[col])) {
         for(const item of APP.data[col]) {
-          await db.collection(col).doc(item.id).set(item, {merge:true});
+          if(!item || typeof item !== 'object' || !item.id) continue;
+          try {
+            await db.collection(col).doc(item.id).set(item, {merge:true});
+          } catch(e) { console.warn('Sync item error:', col, item.id, e); }
         }
       }
     }
-    // Save counters and simple arrays
+    // Save counters, cities, and simple values
     await db.collection('settings').doc('app').set({
       receiptCounter: APP.data.receiptCounter,
       tediyeCounter: APP.data.tediyeCounter,
       productTypes: APP.data.productTypes,
+      cities: APP.data.cities,
     }, {merge:true});
   } catch(e) {
     console.warn('Sync error:', e);
@@ -1755,7 +1772,7 @@ async function loadFromFirestore() {
 function setupRealtimeListeners() {
   if(!isFirebaseReady) return;
   const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
-    'urgentRequests','notes','licenses','depotExits','depotEntries','cariTransactions'];
+    'urgentRequests','notes','licenses','depotExits','depotEntries','cariTransactions','depots','facilities'];
   collections.forEach(col => {
     db.collection(col).onSnapshot(snap => {
       APP.data[col] = snap.docs.map(d => ({id:d.id, ...d.data()}));
@@ -1859,6 +1876,10 @@ function showApp() {
   navigateTo('dashboard');
   setupRealtimeListeners();
   updateSyncStatus();
+
+  // Backup system
+  checkBackupReminder();
+  scheduleAutoBackup();
 }
 
 // ============================================================
@@ -4012,28 +4033,18 @@ function emptyVehicle(id) {
 // DEPOT
 // ============================================================
 function renderDepot() {
-  // Recalculate depot stock from entries and exits
-  const totalEntries = APP.data.depotEntries.reduce((s,e) => s + (e.quantity||0), 0);
-  const totalExits = APP.data.depotExits.reduce((s,e) => s + (e.quantity||0), 0);
-  const totalEntryCost = APP.data.depotEntries.reduce((s,e) => s + (e.cost||0), 0);
-  const totalExitCost = APP.data.depotExits.reduce((s,e) => {
-    const avgCost = totalEntries > 0 ? totalEntryCost / totalEntries : 0;
-    return s + (e.quantity||0) * avgCost;
-  }, 0);
-
-  const depot = APP.data.depots[0] || {stock:0, totalCost:0, name:'Merkez Depo'};
-  // Sync calculated stock
-  depot.stock = Math.max(0, totalEntries - totalExits);
-  depot.totalCost = Math.max(0, totalEntryCost - totalExitCost);
-  APP.data.depots[0] = depot;
-
-  const avgCost = depot.stock > 0 ? depot.totalCost / depot.stock : 0;
+  const depot = APP.data.depots[0];
+  if(!depot) {
+    APP.data.depots = [{id:'depot1', name:'Merkez Depo', city:'Denizli', stock:0, totalCost:0}];
+  }
+  const d = APP.data.depots[0];
+  const avgCost = d.stock > 0 ? (d.totalCost||0) / d.stock : 0;
 
   document.getElementById('depotSummary').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-      <div><div style="font-size:12px;color:var(--text-secondary);">Depo</div><div style="font-size:20px;font-weight:700;">${depot.name}</div></div>
-      <div><div style="font-size:12px;color:var(--text-secondary);">Toplam Stok</div><div style="font-size:20px;font-weight:700;color:var(--accent);">${formatKg(depot.stock)}</div></div>
-      <div><div style="font-size:12px;color:var(--text-secondary);">Toplam Maliyet</div><div style="font-size:20px;font-weight:700;">${formatMoney(depot.totalCost)}</div></div>
+      <div><div style="font-size:12px;color:var(--text-secondary);">Depo</div><div style="font-size:20px;font-weight:700;">${d.name}</div></div>
+      <div><div style="font-size:12px;color:var(--text-secondary);">Toplam Stok</div><div style="font-size:20px;font-weight:700;color:var(--accent);">${formatKg(d.stock||0)}</div></div>
+      <div><div style="font-size:12px;color:var(--text-secondary);">Toplam Maliyet</div><div style="font-size:20px;font-weight:700;">${formatMoney(d.totalCost||0)}</div></div>
       <div><div style="font-size:12px;color:var(--text-secondary);">Ort. Maliyet/kg</div><div style="font-size:20px;font-weight:700;">${formatMoney(avgCost)}/kg</div></div>
     </div>
   `;
@@ -4676,10 +4687,13 @@ function generateReport() {
   document.getElementById('reportTableHead').innerHTML = tableHead;
   document.getElementById('reportTableBody').innerHTML = tableBody;
 
-  // Chart
-  const ctx = document.getElementById('reportChart').getContext('2d');
-  if(reportChart) reportChart.destroy();
-  reportChart = new Chart(ctx, {
+  // Chart (with safety check)
+  try {
+    if(typeof Chart !== 'undefined') {
+      const ctx = document.getElementById('reportChart')?.getContext('2d');
+      if(ctx) {
+        if(reportChart) reportChart.destroy();
+        reportChart = new Chart(ctx, {
     type: type==='cityCollection'||type==='top10' ? 'bar' : type==='cityPrice' ? 'line' : 'bar',
     data: {
       labels,
@@ -4698,6 +4712,9 @@ function generateReport() {
       scales:{y:{beginAtZero:true}}
     }
   });
+      }
+    }
+  } catch(e) { console.warn('Chart error:', e); }
 }
 
 function exportReport(format) {
@@ -4738,8 +4755,15 @@ function exportTediye(format) {
 // DAY REPORT
 // ============================================================
 function generateDayReport() {
-  const date = document.getElementById('dayReportDate')?.value || today();
+  const dateEl = document.getElementById('dayReportDate');
+  if(!dateEl) return;
+  if(!dateEl.value) dateEl.value = today();
+  const date = dateEl.value;
+  const contentEl = document.getElementById('dayReportContent');
+  if(!contentEl) return;
+
   const dayReceipts = APP.data.receipts.filter(r=>r.date===date);
+  const dayVisits = APP.data.visits.filter(v=>v.date===date);
 
   // Group by vehicle
   const byVehicle = {};
@@ -4786,7 +4810,7 @@ function generateDayReport() {
     `;
   }
 
-  document.getElementById('dayReportContent').innerHTML = html;
+  contentEl.innerHTML = html;
 }
 
 // ============================================================
@@ -4883,6 +4907,83 @@ function switchAdminTab(tab) {
       <div class="widget"><div class="widget-body">${APP.data.productTypes.map(p=>`
         <div class="wlist-item"><div class="wlist-name">${p}</div></div>
       `).join('')}</div></div>
+    `;
+  }
+  else if(tab==='backup') {
+    const lastBackup = localStorage.getItem('ekosa_last_backup') || 'Henüz yedeklenmedi';
+    const backupEmail = localStorage.getItem('ekosa_backup_email') || '';
+    const autoTime = localStorage.getItem('ekosa_backup_time') || '20:00';
+    const autoEnabled = localStorage.getItem('ekosa_backup_auto') === 'true';
+    const dataSize = (JSON.stringify(APP.data).length / 1024).toFixed(0);
+    
+    content.innerHTML = `
+      <div class="widget-grid">
+        <div class="widget">
+          <div class="widget-header"><div class="widget-title">📊 Veri Durumu</div></div>
+          <div class="widget-body">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center;">
+              <div><div style="font-size:20px;font-weight:700;color:var(--accent);">${APP.data.customers.length}</div><div style="font-size:11px;color:var(--text-secondary);">Müşteri</div></div>
+              <div><div style="font-size:20px;font-weight:700;color:var(--info);">${APP.data.receipts.length}</div><div style="font-size:11px;color:var(--text-secondary);">Makbuz</div></div>
+              <div><div style="font-size:20px;font-weight:700;color:var(--warning);">${dataSize} KB</div><div style="font-size:11px;color:var(--text-secondary);">Veri Boyutu</div></div>
+            </div>
+            <div style="margin-top:12px;font-size:12px;color:var(--text-secondary);">Son yedekleme: <strong>${lastBackup}</strong></div>
+          </div>
+        </div>
+
+        <div class="widget">
+          <div class="widget-header"><div class="widget-title">📧 Otomatik Yedekleme</div></div>
+          <div class="widget-body">
+            <div class="form-group">
+              <label class="form-label">Yedekleme E-posta Adresi</label>
+              <input class="form-input" id="backupEmailInput" value="${backupEmail}" placeholder="ornek@gmail.com">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Saat</label>
+                <input class="form-input" type="time" id="backupTimeInput" value="${autoTime}">
+              </div>
+              <div class="form-group">
+                <label class="form-label">Durum</label>
+                <select class="form-select" id="backupAutoToggle">
+                  <option value="true" ${autoEnabled?'selected':''}>Aktif</option>
+                  <option value="false" ${!autoEnabled?'selected':''}>Kapalı</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="saveBackupSettings()" style="width:100%;">💾 Ayarları Kaydet</button>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:8px;">⏰ Uygulama açıkken belirlenen saatte otomatik yedek oluşturulur ve e-posta gönderilir.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="widget" style="margin-top:16px;">
+        <div class="widget-header"><div class="widget-title">🔧 Manuel İşlemler</div></div>
+        <div class="widget-body">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <button class="btn btn-primary" onclick="downloadBackup()" style="padding:16px;font-size:14px;">
+              📥 JSON İndir
+            </button>
+            <button class="btn btn-secondary" onclick="document.getElementById('backupFileInput').click()" style="padding:16px;font-size:14px;">
+              📤 JSON Yükle (Geri Yükle)
+            </button>
+            <button class="btn btn-secondary" onclick="emailBackupNow()" style="padding:16px;font-size:14px;">
+              📧 Şimdi Mail Gönder
+            </button>
+            <button class="btn btn-secondary" onclick="shareBackup()" style="padding:16px;font-size:14px;">
+              📱 Paylaş (WhatsApp vb.)
+            </button>
+          </div>
+          <input type="file" id="backupFileInput" accept=".json" style="display:none;" onchange="restoreBackup(event)">
+        </div>
+      </div>
+
+      <div class="widget" style="margin-top:16px;">
+        <div class="widget-header"><div class="widget-title">⚠️ Tehlikeli Bölge</div></div>
+        <div class="widget-body">
+          <button class="btn btn-danger" onclick="resetAllData()" style="width:100%;">🗑️ Tüm Verileri Sıfırla</button>
+          <div style="font-size:11px;color:var(--danger);margin-top:6px;">Bu işlem geri alınamaz! Önce yedek alın.</div>
+        </div>
+      </div>
     `;
   }
 }
@@ -5159,6 +5260,226 @@ function removeFacility(id) {
   saveData();
   switchAdminTab('facilitiesAdmin');
   toast('Tesis silindi');
+}
+
+// ============================================================
+// BACKUP / RESTORE SYSTEM
+// ============================================================
+function downloadBackup() {
+  const data = JSON.stringify(APP.data, null, 2);
+  const blob = new Blob([data], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ekosa_backup_'+today().replace(/-/g,'')+'.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  localStorage.setItem('ekosa_last_backup', new Date().toLocaleString('tr-TR'));
+  toast('✅ Yedek indirildi');
+}
+
+function restoreBackup(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+  if(!confirm('⚠️ Mevcut veriler silinip yedek dosyasındaki verilerle değiştirilecek. Devam etmek istiyor musunuz?')) {
+    event.target.value = ''; return;
+  }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      // Validate structure
+      if(!parsed.customers || !Array.isArray(parsed.customers)) {
+        toast('Geçersiz yedek dosyası','error'); return;
+      }
+      Object.keys(parsed).forEach(k => {
+        if(APP.data.hasOwnProperty(k)) APP.data[k] = parsed[k];
+      });
+      saveData();
+      populateCityFilters();
+      refreshCurrentPage();
+      toast('✅ Veriler geri yüklendi! '+parsed.customers.length+' müşteri, '+parsed.receipts.length+' makbuz');
+    } catch(err) {
+      toast('Dosya okunamadı: '+err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function shareBackup() {
+  const data = JSON.stringify(APP.data);
+  const blob = new Blob([data], {type:'application/json'});
+  const file = new File([blob], 'ekosa_backup_'+today()+'.json', {type:'application/json'});
+
+  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})) {
+    navigator.share({
+      title: 'Ekosa CRM Yedek — '+formatDate(today()),
+      text: 'Ekosa CRM veri yedeği ('+APP.data.customers.length+' müşteri, '+APP.data.receipts.length+' makbuz)',
+      files: [file]
+    }).then(() => {
+      localStorage.setItem('ekosa_last_backup', new Date().toLocaleString('tr-TR'));
+      toast('✅ Yedek paylaşıldı');
+    }).catch(e => {
+      if(e.name !== 'AbortError') toast('Paylaşım iptal edildi','info');
+    });
+  } else {
+    // Fallback - download
+    downloadBackup();
+  }
+}
+
+function emailBackupNow() {
+  const email = localStorage.getItem('ekosa_backup_email');
+  if(!email) { toast('Önce yedekleme e-posta adresini ayarlayın','error'); return; }
+
+  const data = JSON.stringify(APP.data);
+  const blob = new Blob([data], {type:'application/json'});
+  const file = new File([blob], 'ekosa_backup_'+today()+'.json', {type:'application/json'});
+
+  // Try Web Share API to share via email
+  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})) {
+    navigator.share({
+      title: 'Ekosa CRM Yedek — '+formatDate(today()),
+      text: 'Ekosa CRM otomatik yedek.\n\nMüşteri: '+APP.data.customers.length+'\nMakbuz: '+APP.data.receipts.length+'\nZiyaret: '+APP.data.visits.length+'\n\nTarih: '+new Date().toLocaleString('tr-TR'),
+      files: [file]
+    }).then(() => {
+      localStorage.setItem('ekosa_last_backup', new Date().toLocaleString('tr-TR'));
+      toast('✅ Yedek gönderildi');
+    }).catch(() => {
+      fallbackEmailBackup(email);
+    });
+  } else {
+    fallbackEmailBackup(email);
+  }
+}
+
+function fallbackEmailBackup(email) {
+  // Create summary for mailto
+  const summary = `Ekosa CRM Yedek Özeti (${formatDate(today())})%0A%0A`+
+    `Müşteri: ${APP.data.customers.length}%0A`+
+    `Makbuz: ${APP.data.receipts.length}%0A`+
+    `Ziyaret: ${APP.data.visits.length}%0A`+
+    `Teklif: ${APP.data.proposals.length}%0A%0A`+
+    `Not: JSON yedek dosyasını indirip e-postaya ekleyin.`;
+  window.open(`mailto:${email}?subject=Ekosa CRM Yedek - ${today()}&body=${summary}`);
+  downloadBackup();
+  toast('E-posta uygulaması açıldı, indirilen JSON dosyasını ek olarak ekleyin', 'info');
+}
+
+function saveBackupSettings() {
+  const email = document.getElementById('backupEmailInput').value.trim();
+  const time = document.getElementById('backupTimeInput').value;
+  const auto = document.getElementById('backupAutoToggle').value;
+
+  localStorage.setItem('ekosa_backup_email', email);
+  localStorage.setItem('ekosa_backup_time', time);
+  localStorage.setItem('ekosa_backup_auto', auto);
+
+  if(auto === 'true' && email) {
+    scheduleAutoBackup();
+    toast('✅ Otomatik yedekleme aktif — Her gün saat '+time);
+  } else {
+    toast('Yedekleme ayarları kaydedildi');
+  }
+}
+
+function resetAllData() {
+  if(!confirm('⚠️ TÜM VERİLER SİLİNECEK!\n\nBu işlem geri alınamaz.\nÖnce yedek aldığınızdan emin olun.\n\nDevam etmek istiyor musunuz?')) return;
+  if(!confirm('Son kez onaylayın: Tüm müşteriler, makbuzlar, ziyaretler silinecek.')) return;
+
+  APP.data = {
+    users:[], customers:[], visits:[], proposals:[], receipts:[], tediye:[],
+    vehicles:[], depots:[{id:'depot1',name:'Merkez Depo',city:'Denizli',stock:0,totalCost:0}],
+    urgentRequests:[], fuelCards:[], cariTransactions:[], notes:[], licenses:[],
+    cities:['Denizli','Afyon','Uşak','Isparta','Burdur','Antalya','Kütahya','Manisa','Aydın'],
+    facilities:[], productTypes:['Atık Bitkisel Yağ'], vehicleAssignments:[],
+    dayReports:[], depotExits:[], depotEntries:[], contracts:[],
+    receiptCounter:0, tediyeCounter:0
+  };
+  saveData();
+  populateCityFilters();
+  navigateTo('dashboard');
+  toast('Tüm veriler sıfırlandı');
+}
+
+// Auto-backup scheduler
+let backupTimerInterval = null;
+
+function scheduleAutoBackup() {
+  if(backupTimerInterval) clearInterval(backupTimerInterval);
+
+  const autoEnabled = localStorage.getItem('ekosa_backup_auto') === 'true';
+  if(!autoEnabled) return;
+
+  // Check every 60 seconds if it's time to backup
+  backupTimerInterval = setInterval(() => {
+    const targetTime = localStorage.getItem('ekosa_backup_time') || '20:00';
+    const now = new Date();
+    const currentTime = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+    const lastAutoBackup = localStorage.getItem('ekosa_last_auto_backup_date');
+    const todayDate = today();
+
+    if(currentTime === targetTime && lastAutoBackup !== todayDate) {
+      localStorage.setItem('ekosa_last_auto_backup_date', todayDate);
+      performAutoBackup();
+    }
+  }, 60000); // Check every minute
+}
+
+function performAutoBackup() {
+  const email = localStorage.getItem('ekosa_backup_email');
+  if(!email) return;
+
+  toast('⏰ Otomatik yedekleme başlatılıyor...', 'info');
+
+  const data = JSON.stringify(APP.data);
+  const blob = new Blob([data], {type:'application/json'});
+  const file = new File([blob], 'ekosa_backup_'+today()+'.json', {type:'application/json'});
+
+  // Try sharing
+  if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})) {
+    navigator.share({
+      title: 'Ekosa CRM Otomatik Yedek — '+formatDate(today()),
+      text: 'Günlük otomatik yedek.\nMüşteri: '+APP.data.customers.length+' | Makbuz: '+APP.data.receipts.length,
+      files: [file]
+    }).then(() => {
+      localStorage.setItem('ekosa_last_backup', new Date().toLocaleString('tr-TR'));
+      toast('✅ Otomatik yedek gönderildi');
+    }).catch(() => {
+      // Silently download as fallback
+      downloadBackup();
+    });
+  } else {
+    // Auto-download
+    downloadBackup();
+    toast('📥 Otomatik yedek indirildi ('+formatDate(today())+')');
+  }
+}
+
+function checkBackupReminder() {
+  const lastBackup = localStorage.getItem('ekosa_last_backup');
+  if(!lastBackup) {
+    // Never backed up — show warning after 3 seconds
+    setTimeout(() => {
+      toast('⚠️ Henüz veri yedeği alınmadı! Admin → Yedekleme bölümünden yedek alın.', 'error');
+    }, 3000);
+    return;
+  }
+
+  // Check if backup is older than 3 days
+  try {
+    const parts = lastBackup.split(/[., :]/);
+    // Turkish date format: DD.MM.YYYY HH:MM:SS
+    if(parts.length >= 3) {
+      const lastDate = new Date(parts[2]+'-'+parts[1]+'-'+parts[0]);
+      const daysSince = Math.floor((new Date() - lastDate) / (1000*60*60*24));
+      if(daysSince >= 3) {
+        setTimeout(() => {
+          toast('⚠️ Son yedek '+daysSince+' gün önce alınmış. Yedeklemeyi unutmayın!', 'error');
+        }, 3000);
+      }
+    }
+  } catch(e) {}
 }
 
 // ============================================================
