@@ -1364,6 +1364,7 @@ input, select, textarea, button { font-family: var(--font); }
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
 <script>
 // ============================================================
@@ -5284,15 +5285,11 @@ function switchAdminTab(tab) {
             <button class="btn btn-primary" onclick="importMigrationFile()">📤 İçe Aktar</button>
           </div>
           
-          <h4 style="font-size:13px;margin-bottom:8px;">Yöntem 3: Google Sheets / CSV</h4>
-          <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Published URL yapıştırın veya CSV dosyası yükleyin:</p>
-          <div style="display:flex;gap:8px;margin-bottom:8px;">
-            <input class="form-input" id="sheetsUrl" placeholder="https://docs.google.com/spreadsheets/d/e/.../pubhtml" style="flex:1;">
-            <button class="btn btn-secondary" onclick="importFromSheets()">Çek</button>
-          </div>
+          <h4 style="font-size:13px;margin-bottom:8px;">Yöntem 3: Google Sheets / Excel / CSV</h4>
+          <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Google Sheets'den: <strong>Dosya → İndir → Microsoft Excel (.xlsx)</strong> ile indirip yükleyin (tüm sayfalar gelir):</p>
           <div style="display:flex;gap:8px;margin-bottom:16px;">
-            <input type="file" id="csvMigrationInput" accept=".csv,.txt" class="form-input" style="flex:1;">
-            <button class="btn btn-primary" onclick="importCSVFile()">CSV Yükle</button>
+            <input type="file" id="xlsxMigrationInput" accept=".xlsx,.xls,.csv,.txt" class="form-input" style="flex:1;">
+            <button class="btn btn-primary" onclick="importExcelFile()">📊 Yükle & Aktar</button>
           </div>
 
           <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;margin-top:8px;">
@@ -5830,13 +5827,277 @@ function showManualSheetInstructions() {
 }
 
 function importCSVFile() {
-  const file = document.getElementById('csvMigrationInput')?.files[0];
+  const file = document.getElementById('csvMigrationInput')?.files[0] || document.getElementById('xlsxMigrationInput')?.files[0];
   if(!file) { toast('Dosya seçin','error'); return; }
+  if(file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) { importExcelFile(); return; }
+  const reader = new FileReader();
+  reader.onload = function(e) { processCSVImport(e.target.result, file.name); };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function importExcelFile() {
+  const file = document.getElementById('xlsxMigrationInput')?.files[0];
+  if(!file) { toast('Dosya seçin','error'); return; }
+
+  if(typeof XLSX === 'undefined') { toast('XLSX kütüphanesi yüklenemedi. İnternet bağlantınızı kontrol edin.','error'); return; }
+
+  toast('Excel dosyası okunuyor...','info');
+
   const reader = new FileReader();
   reader.onload = function(e) {
-    processCSVImport(e.target.result, file.name);
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const sheetNames = wb.SheetNames;
+      const logEl = document.getElementById('migrationLog');
+      
+      let totalImported = {customers:0, visits:0, receipts:0, tediye:0, proposals:0, notes:0, vehicles:0, cari:0};
+      
+      sheetNames.forEach(name => {
+        const ws = wb.Sheets[name];
+        const data = XLSX.utils.sheet_to_json(ws, {defval:''});
+        if(!data || data.length === 0) return;
+        
+        const nl = name.toLowerCase().replace(/[ıİ]/g,'i').replace(/[şŞ]/g,'s').replace(/[çÇ]/g,'c').replace(/[üÜ]/g,'u').replace(/[öÖ]/g,'o');
+        
+        // Detect sheet type by name
+        if(nl.includes('musteri') || nl.includes('customer') || nl.includes('isletme') || nl === 'customers') {
+          totalImported.customers += importCustomersFromRows(data);
+        }
+        else if(nl.includes('ziyaret') || nl.includes('visit') || nl === 'visits') {
+          totalImported.visits += importVisitsFromRows(data);
+        }
+        else if(nl.includes('makbuz') || nl.includes('receipt') || nl.includes('alim') || nl === 'receipts') {
+          totalImported.receipts += importReceiptsFromRows(data);
+        }
+        else if(nl.includes('tediye') || nl === 'tediye') {
+          totalImported.tediye += importTediyeFromRows(data);
+        }
+        else if(nl.includes('teklif') || nl.includes('proposal') || nl === 'proposals') {
+          totalImported.proposals += importProposalsFromRows(data);
+        }
+        else if(nl.includes('not') || nl.includes('note') || nl === 'notes') {
+          totalImported.notes += importNotesFromRows(data);
+        }
+        else if(nl.includes('arac') || nl.includes('vehicle') || nl === 'vehicles') {
+          totalImported.vehicles += importVehiclesFromRows(data);
+        }
+        else if(nl.includes('cari') || nl.includes('transaction')) {
+          totalImported.cari += importCariFromRows(data);
+        }
+        else {
+          // Unknown sheet - try as customers if it has name-like columns
+          const keys = Object.keys(data[0]||{}).map(k=>k.toLowerCase());
+          if(keys.some(k => k.includes('isletme') || k.includes('musteri') || k.includes('ad'))) {
+            totalImported.customers += importCustomersFromRows(data);
+          }
+        }
+      });
+      
+      saveData(); populateCityFilters();
+      
+      const summary = Object.entries(totalImported).filter(([k,v])=>v>0).map(([k,v])=>v+' '+k).join(', ');
+      
+      if(logEl) {
+        logEl.innerHTML = `
+          <div class="widget">
+            <div class="widget-header"><div class="widget-title" style="color:var(--success);">✅ Excel Aktarma Tamamlandı</div></div>
+            <div class="widget-body">
+              <div style="font-size:13px;">Dosya: <strong>${file.name}</strong> (${sheetNames.length} sayfa)</div>
+              <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">Sayfalar: ${sheetNames.join(', ')}</div>
+              <div style="font-size:13px;margin-top:8px;">✅ Aktarılan: <strong>${summary || 'Yeni veri bulunamadı'}</strong></div>
+              <div style="font-size:13px;margin-top:4px;">Toplam: ${APP.data.customers.length} müşteri, ${APP.data.receipts.length} makbuz, ${APP.data.visits.length} ziyaret</div>
+            </div>
+          </div>
+        `;
+      }
+      toast('✅ Excel aktarma: ' + (summary || 'Yeni veri yok'));
+      
+    } catch(err) {
+      toast('Excel okunamadı: ' + err.message, 'error');
+      console.error('XLSX parse error:', err);
+    }
   };
-  reader.readAsText(file, 'UTF-8');
+  reader.readAsArrayBuffer(file);
+}
+
+// Sheet-specific import helpers
+function importCustomersFromRows(rows) {
+  let count = 0;
+  rows.forEach(row => {
+    const name = findVal(row, ['işletme','isletme','müşteri','musteri','ad','name','İşletme','Ad','Müşteri']);
+    if(!name || name.length < 2) return;
+    if(APP.data.customers.find(c => c.name.toLowerCase() === name.toLowerCase())) return;
+    APP.data.customers.push({
+      id: uid(), name,
+      city: findVal(row, ['il','şehir','sehir','city','İl']) || '',
+      district: findVal(row, ['ilçe','ilce','district','İlçe']) || '',
+      contact: findVal(row, ['yetkili','kişi','kisi','contact','Yetkili']) || '',
+      phone: findVal(row, ['telefon','tel','phone','gsm','Telefon']) || '',
+      address: findVal(row, ['adres','address','Adres']) || '',
+      type: (findVal(row, ['tip','tür','type','Tip'])||'').toLowerCase().includes('talep') ? 'onDemand' : 'periodic',
+      period: parseInt(findVal(row, ['periyot','period','gün','gun','Periyot']))||30,
+      priceNakit: parseFloat(findVal(row, ['nakit','fiyat','price','nfiyat','Nakit','Fiyat']))||0,
+      price: parseFloat(findVal(row, ['nakit','fiyat','price','nfiyat','Nakit','Fiyat']))||0,
+      priceYakit: parseFloat(findVal(row, ['yakıt','yakit','ykart','Yakıt']))||0,
+      priceFatura: parseFloat(findVal(row, ['fatura','faturalı','Fatura']))||0,
+      barrels: parseInt(findVal(row, ['varil','barrel','Varil']))||0,
+      fuelCardNo: findVal(row, ['kart','kartno','fuel','Kart']) || '',
+      paymentPersons: [], createdAt: today()
+    });
+    count++;
+  });
+  return count;
+}
+
+function importVisitsFromRows(rows) {
+  let count = 0;
+  rows.forEach(row => {
+    const custName = findVal(row, ['işletme','isletme','müşteri','musteri','İşletme','customerName']);
+    const date = findVal(row, ['tarih','date','Tarih']);
+    if(!custName || !date) return;
+    APP.data.visits.push({
+      id: uid(), customerName: custName,
+      customerId: APP.data.customers.find(c=>c.name===custName)?.id || '',
+      city: findVal(row, ['il','city','İl']) || '',
+      date: normalizeDate(date), collected: true,
+      quantity: parseFloat(findVal(row, ['miktar','kg','quantity','Miktar']))||0,
+      price: parseFloat(findVal(row, ['fiyat','price','Fiyat']))||0,
+      personnelName: findVal(row, ['personel','personnel','Personel']) || '',
+      createdAt: new Date().toISOString()
+    });
+    count++;
+  });
+  return count;
+}
+
+function importReceiptsFromRows(rows) {
+  let count = 0;
+  rows.forEach(row => {
+    const no = findVal(row, ['no','makbuzno','receiptNo','No']);
+    const custName = findVal(row, ['işletme','isletme','müşteri','customerName','İşletme']);
+    if(!custName) return;
+    APP.data.receiptCounter++;
+    APP.data.receipts.push({
+      id: uid(), receiptNo: no || 'EKS-'+String(APP.data.receiptCounter).padStart(4,'0'),
+      date: normalizeDate(findVal(row, ['tarih','date','Tarih'])),
+      customerName: custName,
+      customerId: APP.data.customers.find(c=>c.name===custName)?.id || '',
+      city: findVal(row, ['il','city','İl']) || '',
+      quantity: parseFloat(findVal(row, ['miktar','kg','quantity','Miktar']))||0,
+      unitPrice: parseFloat(findVal(row, ['fiyat','price','birimfiyat','Fiyat']))||0,
+      total: parseFloat(findVal(row, ['toplam','total','Toplam']))||0,
+      kdv: 0, grandTotal: parseFloat(findVal(row, ['toplam','total','gtoplam','Toplam']))||0,
+      paymentMethods: [], createdAt: new Date().toISOString()
+    });
+    count++;
+  });
+  return count;
+}
+
+function importTediyeFromRows(rows) {
+  let count = 0;
+  rows.forEach(row => {
+    const name = findVal(row, ['ad','adsoyad','personName','Ad']);
+    if(!name) return;
+    APP.data.tediyeCounter++;
+    APP.data.tediye.push({
+      id: uid(), tediyeNo: findVal(row,['no','tediyeNo','No'])||'TDY-'+String(APP.data.tediyeCounter).padStart(4,'0'),
+      date: normalizeDate(findVal(row, ['tarih','date','Tarih'])),
+      personName: name, personTC: findVal(row, ['tc','tcno','TC'])||'',
+      amount: parseFloat(findVal(row, ['tutar','amount','Tutar']))||0,
+      city: findVal(row, ['il','city','İl'])||'', district: findVal(row, ['ilçe','ilce','İlçe'])||'',
+      product: 'Atık Bitkisel Yağ', createdAt: new Date().toISOString()
+    });
+    count++;
+  });
+  return count;
+}
+
+function importProposalsFromRows(rows) {
+  let count = 0;
+  rows.forEach(row => {
+    const biz = findVal(row, ['işletme','isletme','müşteri','businessName','İşletme']);
+    if(!biz) return;
+    APP.data.proposals.push({
+      id: uid(), businessName: biz,
+      price: parseFloat(findVal(row, ['fiyat','teklif','price','Fiyat']))||0,
+      date: normalizeDate(findVal(row, ['tarih','date','Tarih'])),
+      status: 'pending', followUp: false, createdAt: new Date().toISOString()
+    });
+    count++;
+  });
+  return count;
+}
+
+function importNotesFromRows(rows) {
+  let count = 0;
+  rows.forEach(row => {
+    const text = findVal(row, ['not','note','metin','text','Not']);
+    if(!text) return;
+    APP.data.notes.push({
+      id: uid(), text, city: findVal(row, ['il','city','İl'])||'',
+      date: normalizeDate(findVal(row, ['tarih','date','Tarih'])),
+      visibility: 'shared', createdBy: 'Import', createdAt: new Date().toISOString()
+    });
+    count++;
+  });
+  return count;
+}
+
+function importVehiclesFromRows(rows) {
+  let count = 0;
+  rows.forEach(row => {
+    const plate = findVal(row, ['plaka','plate','araç','Plaka']);
+    if(!plate) return;
+    if(APP.data.vehicles.find(v=>v.plate===plate)) return;
+    APP.data.vehicles.push({
+      id: uid(), plate, personnel: (findVal(row, ['personel','personnel','Personel'])||'').split(',').map(s=>s.trim()).filter(Boolean),
+      stock: 0
+    });
+    count++;
+  });
+  return count;
+}
+
+function importCariFromRows(rows) {
+  let count = 0;
+  rows.forEach(row => {
+    const desc = findVal(row, ['açıklama','aciklama','description','Açıklama']);
+    APP.data.cariTransactions.push({
+      id: uid(), customerId: '', date: normalizeDate(findVal(row, ['tarih','date','Tarih'])),
+      type: 'duzeltme', description: desc||'İçe aktarma',
+      borc: parseFloat(findVal(row, ['borç','borc','debit','Borç']))||0,
+      alacak: parseFloat(findVal(row, ['alacak','credit','Alacak']))||0,
+    });
+    count++;
+  });
+  return count;
+}
+
+// Helper: find value in row object by trying multiple key names
+function findVal(row, keys) {
+  for(const k of keys) {
+    // Exact match
+    if(row[k] !== undefined && row[k] !== '') return String(row[k]).trim();
+    // Case-insensitive
+    const found = Object.keys(row).find(rk => rk.toLowerCase().replace(/\s/g,'') === k.toLowerCase().replace(/\s/g,''));
+    if(found && row[found] !== undefined && row[found] !== '') return String(row[found]).trim();
+  }
+  return '';
+}
+
+// Helper: normalize date formats (DD.MM.YYYY, DD/MM/YYYY, etc.) to YYYY-MM-DD
+function normalizeDate(d) {
+  if(!d) return today();
+  const s = String(d).trim();
+  // Already YYYY-MM-DD
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // DD.MM.YYYY or DD/MM/YYYY
+  const m = s.match(/(\d{1,2})[.\/](\d{1,2})[.\/](\d{4})/);
+  if(m) return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  // Try Date parse
+  try { const dt = new Date(s); if(!isNaN(dt)) return dt.toISOString().split('T')[0]; } catch(e){}
+  return today();
 }
 
 function processCSVImport(csvText, source) {
