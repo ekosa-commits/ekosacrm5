@@ -486,55 +486,7 @@ input, select, textarea, button { font-family: var(--font); }
 .fab svg { width:24px; height:24px; }
 @media (min-width:769px) { .fab { bottom:24px; right:24px; } }
 
-/* ===== AI CHAT ===== */
-.ai-fab {
-  position:fixed; bottom:80px; right:84px;
-  width:52px; height:52px; border-radius:50%;
-  background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color:#fff; border:none; box-shadow:0 4px 16px rgba(102,126,234,0.4);
-  display:flex; align-items:center; justify-content:center;
-  cursor:pointer; z-index:100; transition: all 0.3s ease;
-}
-.ai-fab:hover { transform:scale(1.1); box-shadow:0 6px 24px rgba(102,126,234,0.5); }
-.ai-fab svg { width:24px; height:24px; }
-@media (min-width:769px) { .ai-fab { bottom:24px; right:96px; } }
-.ai-fab-badge {
-  position:absolute; top:-2px; right:-2px;
-  width:14px; height:14px; border-radius:50%;
-  background:#4CAF50; border:2px solid #fff;
-  animation: aipulse 2s infinite;
-}
-@keyframes aipulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
-
-.ai-panel {
-  display:none; position:fixed; z-index:1001;
-  bottom:0; right:0; width:420px; height:100vh;
-  background:var(--bg-card); box-shadow:-4px 0 24px rgba(0,0,0,0.15);
-  flex-direction:column; transition:transform 0.3s ease;
-}
-.ai-panel.show { display:flex; animation:aiSlideIn 0.3s ease; }
-@keyframes aiSlideIn { from{transform:translateX(100%)} to{transform:translateX(0)} }
-@media (max-width:480px) { .ai-panel { width:100vw; } }
-
-.ai-header {
-  display:flex; align-items:center; justify-content:space-between;
-  padding:16px 20px; border-bottom:1px solid var(--border);
-  background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:#fff;
-}
-.ai-header-title { font-size:15px; font-weight:700; display:flex; align-items:center; gap:8px; }
-.ai-header-actions { display:flex; gap:8px; }
-.ai-header-btn {
-  background:rgba(255,255,255,0.2); border:none; color:#fff;
-  width:32px; height:32px; border-radius:50%; cursor:pointer;
-  display:flex; align-items:center; justify-content:center;
-  transition:background 0.2s;
-}
-.ai-header-btn:hover { background:rgba(255,255,255,0.3); }
-
-.ai-messages {
-  flex:1; overflow-y:auto; padding:16px 20px;
-  display:flex; flex-direction:column; gap:12px;
-}
+/* ===== AI CHAT WIDGET ===== */
 .ai-msg {
   max-width:92%; padding:10px 14px; border-radius:12px;
   font-size:13px; line-height:1.6; word-wrap:break-word;
@@ -547,46 +499,7 @@ input, select, textarea, button { font-family: var(--font); }
   align-self:flex-start; background:var(--bg);
   color:var(--text); border-bottom-left-radius:4px; border:1px solid var(--border);
 }
-.ai-msg-ai p { margin:6px 0; }
 .ai-msg-ai strong { color:var(--accent); }
-.ai-msg-ai ul { margin:4px 0 4px 16px; }
-.ai-msg-ai li { margin:2px 0; }
-.ai-msg-system {
-  align-self:center; background:transparent; color:var(--text-light);
-  font-size:11px; text-align:center; padding:4px 12px;
-}
-.ai-typing { display:flex; gap:4px; padding:8px 14px; }
-.ai-typing span {
-  width:6px; height:6px; border-radius:50%; background:var(--text-light);
-  animation:typingDot 1.2s infinite;
-}
-.ai-typing span:nth-child(2) { animation-delay:0.2s; }
-.ai-typing span:nth-child(3) { animation-delay:0.4s; }
-@keyframes typingDot { 0%,60%,100%{opacity:0.3;transform:scale(0.8)} 30%{opacity:1;transform:scale(1.1)} }
-
-.ai-input-area {
-  padding:12px 16px; border-top:1px solid var(--border);
-  display:flex; gap:8px; align-items:flex-end;
-}
-.ai-input {
-  flex:1; padding:10px 14px; border:1px solid var(--border);
-  border-radius:20px; font-size:14px; color:var(--text);
-  background:var(--bg); outline:none; resize:none;
-  max-height:100px; min-height:40px; font-family:var(--font);
-}
-.ai-input:focus { border-color:#667eea; }
-.ai-send {
-  width:40px; height:40px; border-radius:50%; border:none;
-  background:linear-gradient(135deg,#667eea,#764ba2);
-  color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center;
-  flex-shrink:0; transition:all 0.2s;
-}
-.ai-send:hover { transform:scale(1.05); }
-.ai-send:disabled { opacity:0.5; cursor:not-allowed; }
-
-.ai-suggestions {
-  display:flex; flex-wrap:wrap; gap:6px; padding:0 20px 12px;
-}
 .ai-suggestion {
   padding:6px 12px; border-radius:16px; font-size:11px;
   background:var(--bg); border:1px solid var(--border);
@@ -600,52 +513,7 @@ input, select, textarea, button { font-family: var(--font); }
 <!-- Toast Container -->
 <div class="toast-container" id="toastContainer"></div>
 
-<!-- AI Assistant Button -->
-<button class="ai-fab" id="aiFab" onclick="toggleAIPanel()" title="AI Asistan" style="display:none;">
-  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7 7 0 0 1 7.27 19H6a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5m9 0a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5"/></svg>
-  <div class="ai-fab-badge"></div>
-</button>
-
-<!-- AI Chat Panel -->
-<div class="ai-panel" id="aiPanel">
-  <div class="ai-header">
-    <div class="ai-header-title">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7 7 0 0 1 7.27 19H6a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5m9 0a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5"/></svg>
-      Ekosa AI Asistan
-    </div>
-    <div class="ai-header-actions">
-      <button class="ai-header-btn" onclick="clearAIChat()" title="Sohbeti Temizle">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-      </button>
-      <button class="ai-header-btn" onclick="openAISettings()" title="API Ayarları">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-      </button>
-      <button class="ai-header-btn" onclick="toggleAIPanel()" title="Kapat">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
-  </div>
-  <div class="ai-messages" id="aiMessages">
-    <div class="ai-msg ai-msg-ai">Merhaba! Ben Ekosa AI Asistan. CRM verilerinize dayalı sorularınızı yanıtlayabilirim. Örneğin:<br><br>
-    📊 "Bugün kaç kg topladık?"<br>
-    🏭 "Denizli'deki işletmelerin durumu ne?"<br>
-    💰 "En çok borcu olan müşteriler kimler?"<br>
-    📈 "Bu ayın toplama özeti"<br>
-    🚛 "Araçlardaki stok durumu nedir?"</div>
-  </div>
-  <div class="ai-suggestions" id="aiSuggestions">
-    <div class="ai-suggestion" onclick="aiAsk(this.textContent)">Bugünün özeti</div>
-    <div class="ai-suggestion" onclick="aiAsk(this.textContent)">Gecikmiş ziyaretler</div>
-    <div class="ai-suggestion" onclick="aiAsk(this.textContent)">Toplam stok durumu</div>
-    <div class="ai-suggestion" onclick="aiAsk(this.textContent)">Cari bakiye özeti</div>
-  </div>
-  <div class="ai-input-area">
-    <textarea class="ai-input" id="aiInput" placeholder="Sorunuzu yazın..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiSend();}"></textarea>
-    <button class="ai-send" id="aiSendBtn" onclick="aiSend()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-    </button>
-  </div>
-</div>
+<!-- AI Assistant - embedded in dashboard -->
 
 <!-- Print Area -->
 <div id="printArea" style="display:none;"></div>
@@ -982,6 +850,9 @@ input, select, textarea, button { font-family: var(--font); }
                   <button class="btn btn-secondary" onclick="foPrintReceipt()" style="width:100%;padding:14px;font-size:15px;">
                     🖨️ Teslim Fişi Yazdır
                   </button>
+                  <button class="btn btn-secondary" onclick="if(foState.lastReceipt) generateTeslimFisiPDF(foState.lastReceipt.id)" style="width:100%;padding:12px;font-size:14px;margin-top:8px;">
+                    📄 PDF Olarak Gönder / İndir
+                  </button>
                 </div>
               </div>
 
@@ -1284,23 +1155,10 @@ input, select, textarea, button { font-family: var(--font); }
           <div class="widget" style="margin-top:20px;">
             <div class="widget-header">
               <div class="widget-title">Hesap Ekstresi</div>
-              <button class="btn btn-sm btn-secondary" onclick="openCariManualModal()">Manuel Düzeltme</button>
-            </div>
-            <div class="data-table-wrap">
-              <table class="data-table">
-                <thead><tr><th>Tarih</th><th>İşlem</th><th>Açıklama</th><th>Borç</th><th>Alacak</th><th>Bakiye</th></tr></thead>
-                <tbody id="cariBody"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-          <div class="widget-grid">
-            <div class="widget"><div class="widget-header"><div class="widget-title">Bakiye Özeti</div></div><div class="widget-body" id="cariSummary"></div></div>
-          </div>
-          <div class="widget" style="margin-top:20px;">
-            <div class="widget-header">
-              <div class="widget-title">Hesap Ekstresi</div>
-              <button class="btn btn-sm btn-secondary" onclick="openCariManualModal()">Manuel Düzeltme</button>
+              <div style="display:flex;gap:6px;">
+                <button class="btn btn-sm btn-primary" onclick="generateHesapEkstresiPDF(document.getElementById('cariSelectedCustomerId').value)">📄 PDF</button>
+                <button class="btn btn-sm btn-secondary" onclick="openCariManualModal()">Manuel Düzeltme</button>
+              </div>
             </div>
             <div class="data-table-wrap">
               <table class="data-table">
@@ -1592,6 +1450,179 @@ function formatDate(d) { if(!d) return '-'; const p=d.split('-'); return p[2]+'.
 function formatMoney(n) { return new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(n||0); }
 function formatKg(n) { return (n||0).toLocaleString('tr-TR') + ' kg'; }
 
+// Company info
+const FIRMA = {
+  ad: 'EKOSA ÇEVRE ÇÖZÜMLERİ GIDA HAY. SAN. TİC. LTD. ŞTİ.',
+  adKisa: 'EKOSA ÇEVRE ÇÖZÜMLERİ',
+  adres: 'Aktoprak Mücavir Mevkii Karadeniz Sk. 132 Blok A No:1-2 Dinar / Afyonkarahisar',
+  vd: 'Dinar V.D.',
+  vkn: '3292317330',
+  lisans: '1244234',
+  web: 'www.ekosacevre.com',
+  email: 'ekosa@ekosacevre.com',
+  tel: '0549 155 03 00'
+};
+
+// Professional PDF Generation
+function pdfBaslik() {
+  return `<div style="border-bottom:3px solid #1B2A4A;padding-bottom:14px;margin-bottom:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+      <div>
+        <div style="font-size:18px;font-weight:800;color:#1B2A4A;letter-spacing:0.5px;">${FIRMA.adKisa}</div>
+        <div style="font-size:9px;color:#555;margin-top:2px;">${FIRMA.ad}</div>
+        <div style="font-size:9px;color:#777;margin-top:4px;max-width:300px;line-height:1.4;">${FIRMA.adres}</div>
+      </div>
+      <div style="text-align:right;font-size:9px;color:#555;line-height:1.6;">
+        <div><strong>VKN:</strong> ${FIRMA.vkn} — ${FIRMA.vd}</div>
+        <div><strong>Lisans:</strong> ${FIRMA.lisans}</div>
+        <div>📞 ${FIRMA.tel}</div>
+        <div>✉️ ${FIRMA.email}</div>
+        <div>🌐 ${FIRMA.web}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function pdfAltBilgi() {
+  return `<div style="border-top:2px solid #1B2A4A;margin-top:24px;padding-top:8px;display:flex;justify-content:space-between;font-size:8px;color:#999;">
+    <span>${FIRMA.adKisa} — ${FIRMA.web}</span>
+    <span>${FIRMA.tel} — ${FIRMA.email}</span>
+  </div>`;
+}
+
+function generateTeslimFisiPDF(receiptId) {
+  const r = APP.data.receipts.find(x=>x.id===receiptId);
+  if(!r) return;
+  const showPrice = r.printType !== 'fiyatsiz';
+  const dateStr = formatDate(r.date);
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <style>
+    @page{size:A4;margin:20mm 15mm}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#333;padding:20px}
+    table{width:100%;border-collapse:collapse}
+    th{background:#1B2A4A;color:#fff;padding:8px 10px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;text-align:left}
+    td{padding:8px 10px;border-bottom:1px solid #eee}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+    .info-box{background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:12px}
+    .info-box label{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:0.3px;display:block;margin-bottom:3px}
+    .info-box span{font-size:12px;font-weight:600;color:#333}
+    .title-bar{background:linear-gradient(135deg,#1B2A4A,#2C3E6B);color:#fff;padding:10px 16px;border-radius:6px;text-align:center;margin:14px 0;font-size:14px;font-weight:700;letter-spacing:1px}
+    .total-row td{font-weight:700;font-size:13px;background:#f8f9fa}
+    .sign-area{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px;text-align:center}
+    .sign-box{border-top:1px solid #333;padding-top:8px;font-size:10px;color:#555}
+    .legal{background:#fffbf0;border:1px solid #ffe0b2;border-radius:6px;padding:12px;margin-top:20px;font-size:9px;color:#666;line-height:1.5}
+    .legal strong{color:#e65100}
+  </style></head><body>
+  ${pdfBaslik()}
+  <div class="title-bar">BİTKİSEL ATIK YAĞ TESLİM FİŞİ</div>
+  <div class="info-grid">
+    <div class="info-box"><label>Fiş No</label><span>${r.receiptNo}</span></div>
+    <div class="info-box"><label>Tarih</label><span>${dateStr}</span></div>
+    <div class="info-box"><label>İşletme</label><span>${r.customerName}</span></div>
+    <div class="info-box"><label>İl / İlçe</label><span>${r.city||''} ${r.district?'/ '+r.district:''}</span></div>
+    <div class="info-box"><label>Araç Plaka</label><span>${r.vehiclePlate||'-'}</span></div>
+    <div class="info-box"><label>Personel</label><span>${r.personnelName||'-'}</span></div>
+  </div>
+  <table>
+    <thead><tr><th>Açıklama</th><th style="text-align:right;">Miktar</th>${showPrice?'<th style="text-align:right;">Birim Fiyat</th><th style="text-align:right;">Tutar</th>':''}</tr></thead>
+    <tbody>
+      <tr><td>Bitkisel Atık Yağ</td><td style="text-align:right;font-weight:600;">${r.quantity} kg</td>${showPrice?`<td style="text-align:right;">${formatMoney(r.unitPrice)}/kg</td><td style="text-align:right;">${formatMoney(r.total)}</td>`:''}</tr>
+      ${showPrice?`
+      <tr><td colspan="3" style="text-align:right;color:#888;">KDV (%0)</td><td style="text-align:right;">₺0,00</td></tr>
+      <tr class="total-row"><td colspan="3" style="text-align:right;">TOPLAM</td><td style="text-align:right;color:#1B2A4A;font-size:15px;">${formatMoney(r.total)}</td></tr>
+      `:''}
+    </tbody>
+  </table>
+  <div class="sign-area">
+    <div><div style="height:60px;"></div><div class="sign-box">TESLİM EDEN<br><strong>${r.personnelName||''}</strong></div></div>
+    <div><div style="height:60px;"></div><div class="sign-box">TESLİM ALAN<br>(İşletme Yetkilisi)</div></div>
+  </div>
+  <div class="legal">
+    <strong>⚠️ MoTAT Bildirimi:</strong> İşbu fiş ile tarafınıza; 06/06/2015 tarihli Bitkisel Atık Yağların Kontrolü Yönetmeliği kapsamında bitkisel atık yağlarınız için MoTAT (Mobil Atık Takip Sistemi) üzerinden atık gönderim kaydı açmanızın zorunlu olduğu bildirilmiştir. Bu yükümlülüğün yerine getirilmemesinden doğacak her türlü idari ve hukuki sorumluluk işletmenize aittir.
+  </div>
+  ${pdfAltBilgi()}
+  </body></html>`;
+
+  const w = window.open('','_blank');
+  w.document.write(html); w.document.close();
+  setTimeout(()=>w.print(), 500);
+}
+
+function generateHesapEkstresiPDF(customerId) {
+  const cust = APP.data.customers.find(c=>c.id===customerId);
+  if(!cust) { toast('Müşteri bulunamadı','error'); return; }
+  const txs = APP.data.cariTransactions.filter(t=>t.customerId===customerId).sort((a,b)=>a.date.localeCompare(b.date));
+  let runBal = 0;
+  const totalBorc = txs.reduce((s,t)=>s+(t.borc||0),0);
+  const totalAlacak = txs.reduce((s,t)=>s+(t.alacak||0),0);
+  const netBal = totalBorc - totalAlacak;
+
+  const rows = txs.map(t => {
+    runBal += (t.borc||0) - (t.alacak||0);
+    return `<tr>
+      <td>${formatDate(t.date)}</td>
+      <td>${t.type==='alim'?'Alım':t.type==='odeme'?'Ödeme':'Düzeltme'}</td>
+      <td>${t.description||'-'}</td>
+      <td style="text-align:right;color:#c62828;">${t.borc?formatMoney(t.borc):'-'}</td>
+      <td style="text-align:right;color:#2e7d32;">${t.alacak?formatMoney(t.alacak):'-'}</td>
+      <td style="text-align:right;font-weight:600;color:${runBal>0?'#c62828':'#2e7d32'}">${formatMoney(Math.abs(runBal))} ${runBal>0?'B':'A'}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <style>
+    @page{size:A4;margin:15mm}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Arial,sans-serif;font-size:10px;color:#333;padding:20px}
+    table{width:100%;border-collapse:collapse;margin-top:14px}
+    th{background:#1B2A4A;color:#fff;padding:7px 8px;font-size:9px;text-transform:uppercase;letter-spacing:0.5px}
+    td{padding:6px 8px;border-bottom:1px solid #eee;font-size:10px}
+    tr:nth-child(even) td{background:#fafafa}
+    .title-bar{background:linear-gradient(135deg,#1B2A4A,#2C3E6B);color:#fff;padding:10px 16px;border-radius:6px;text-align:center;margin:14px 0;font-size:14px;font-weight:700;letter-spacing:1px}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+    .info-box{background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:10px}
+    .info-box label{font-size:8px;color:#888;text-transform:uppercase;display:block;margin-bottom:2px}
+    .info-box span{font-size:11px;font-weight:600}
+    .summary{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:16px}
+    .summary-box{text-align:center;padding:12px;border-radius:6px;border:1px solid #e9ecef}
+    .summary-box .val{font-size:18px;font-weight:700;margin:4px 0}
+    .summary-box .lbl{font-size:8px;color:#888;text-transform:uppercase}
+  </style></head><body>
+  ${pdfBaslik()}
+  <div class="title-bar">HESAP EKSTRESİ</div>
+  <div class="info-grid">
+    <div class="info-box"><label>İşletme</label><span>${cust.name}</span></div>
+    <div class="info-box"><label>İl / İlçe</label><span>${cust.city||''} ${cust.district?'/ '+cust.district:''}</span></div>
+    <div class="info-box"><label>Yetkili / Telefon</label><span>${cust.contact||'-'} — ${cust.phone||'-'}</span></div>
+    <div class="info-box"><label>Ekstre Tarihi</label><span>${formatDate(today())}</span></div>
+  </div>
+  <div class="summary">
+    <div class="summary-box" style="background:#fff5f5;border-color:#ffcdd2;"><div class="lbl">Toplam Borç</div><div class="val" style="color:#c62828;">${formatMoney(totalBorc)}</div></div>
+    <div class="summary-box" style="background:#f1f8e9;border-color:#c5e1a5;"><div class="lbl">Toplam Ödeme</div><div class="val" style="color:#2e7d32;">${formatMoney(totalAlacak)}</div></div>
+    <div class="summary-box" style="background:${netBal>0?'#fff5f5':'#f1f8e9'};border-color:${netBal>0?'#ffcdd2':'#c5e1a5'};"><div class="lbl">Net Bakiye</div><div class="val" style="color:${netBal>0?'#c62828':'#2e7d32'}">${formatMoney(Math.abs(netBal))}</div><div style="font-size:9px;color:#888;">${netBal>0?'Borcumuz':'Alacağımız'}</div></div>
+  </div>
+  <table>
+    <thead><tr><th>Tarih</th><th>İşlem</th><th>Açıklama</th><th style="text-align:right;">Borç</th><th style="text-align:right;">Alacak</th><th style="text-align:right;">Bakiye</th></tr></thead>
+    <tbody>${rows||'<tr><td colspan="6" style="text-align:center;color:#999;padding:20px;">İşlem kaydı bulunamadı</td></tr>'}</tbody>
+    <tfoot>
+      <tr style="background:#f5f5f5;font-weight:700;">
+        <td colspan="3" style="text-align:right;">TOPLAM</td>
+        <td style="text-align:right;color:#c62828;">${formatMoney(totalBorc)}</td>
+        <td style="text-align:right;color:#2e7d32;">${formatMoney(totalAlacak)}</td>
+        <td style="text-align:right;color:${netBal>0?'#c62828':'#2e7d32'};font-size:12px;">${formatMoney(Math.abs(netBal))} ${netBal>0?'B':'A'}</td>
+      </tr>
+    </tfoot>
+  </table>
+  ${pdfAltBilgi()}
+  </body></html>`;
+
+  const w = window.open('','_blank');
+  w.document.write(html); w.document.close();
+  setTimeout(()=>w.print(), 500);
+}
+
 function toast(msg, type='success') {
   const c = document.getElementById('toastContainer');
   const t = document.createElement('div');
@@ -1828,7 +1859,6 @@ function showApp() {
   navigateTo('dashboard');
   setupRealtimeListeners();
   updateSyncStatus();
-  showAIButton();
 }
 
 // ============================================================
@@ -1860,6 +1890,8 @@ function navigateTo(page) {
 }
 
 function refreshCurrentPage() {
+  // GUARD: Don't refresh fieldOps if there's an active operation
+  if(APP.currentPage === 'fieldOps' && foState.selectedCustomer) return;
   switch(APP.currentPage) {
     case 'dashboard': renderDashboard(); break;
     case 'fieldOps': renderFieldOps(); break;
@@ -2171,6 +2203,29 @@ function renderDashboard() {
             <div class="wlist-right"><span class="wlist-tag tag-yellow">${daysLeft} gün</span></div>
           </div>`;
         }).join('') : '<div class="widget-empty">Yaklaşan sözleşme bitimi yok ✓</div>'}
+      </div>
+    </div>
+
+    <!-- AI Asistan Widget -->
+    <div class="widget" style="grid-column:1/-1;">
+      <div class="widget-header" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border:none;">
+        <div class="widget-title" style="color:#fff;">🤖 Ekosa AI Asistan <span style="font-size:10px;opacity:0.7;font-weight:400;">Ücretsiz • Çevrimdışı</span></div>
+        <button class="btn btn-sm" onclick="clearAIChat()" style="background:rgba(255,255,255,0.2);color:#fff;border:none;font-size:11px;">Temizle</button>
+      </div>
+      <div id="aiMessages" style="max-height:300px;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px;">
+        <div class="ai-msg ai-msg-ai">Merhaba! Soru örnekleri: "Bugünün özeti", "Gecikmiş ziyaretler", "MoTAT nedir", "Stok durumu", "Cari bakiye"</div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 16px;">
+        <div class="ai-suggestion" onclick="aiAsk(this.textContent)">Bugünün özeti</div>
+        <div class="ai-suggestion" onclick="aiAsk(this.textContent)">Gecikmiş ziyaretler</div>
+        <div class="ai-suggestion" onclick="aiAsk(this.textContent)">Stok durumu</div>
+        <div class="ai-suggestion" onclick="aiAsk(this.textContent)">Cari bakiye</div>
+        <div class="ai-suggestion" onclick="aiAsk(this.textContent)">MoTAT nedir</div>
+        <div class="ai-suggestion" onclick="aiAsk(this.textContent)">Teklif durumu</div>
+      </div>
+      <div style="display:flex;gap:8px;padding:8px 16px 12px;border-top:1px solid var(--border);">
+        <input class="form-input" id="aiInput" placeholder="Sorunuzu yazın..." style="flex:1;border-radius:20px;padding:10px 16px;" onkeydown="if(event.key==='Enter'){aiSend();}">
+        <button class="btn btn-primary" onclick="aiSend()" style="border-radius:20px;padding:10px 18px;">Sor</button>
       </div>
     </div>
   `;
@@ -3296,6 +3351,7 @@ function renderReceipts() {
     <td style="white-space:nowrap;">
       <button class="btn btn-sm btn-secondary" onclick="openEditReceiptModal('${r.id}')">✏️</button>
       <button class="btn btn-sm btn-primary" onclick="printReceiptRawBT('${r.id}')">🖨️</button>
+      <button class="btn btn-sm btn-secondary" onclick="generateTeslimFisiPDF('${r.id}')" title="PDF">📄</button>
       <button class="btn btn-sm btn-danger" onclick="deleteReceipt('${r.id}')">🗑️</button>
     </td>
   </tr>`).join('');
@@ -5118,33 +5174,13 @@ const SEKTOR_BILGI = {
   biyodizel: `Geri Kazanım: Toplanan bitkisel atık yağlar geri kazanım tesislerinde biyodizel, sabun, hayvan yemi katkısı gibi ürünlere dönüştürülür. Geri kazanım tesisleri de Bakanlık lisanslıdır. Toplama firması yağı sadece lisanslı geri kazanım tesisine verebilir.`
 };
 
-function toggleAIPanel() {
-  document.getElementById('aiPanel').classList.toggle('show');
-}
-function showAIButton() {
-  document.getElementById('aiFab').style.display = 'flex';
-}
+function toggleAIPanel() {}
+function showAIButton() {}
 function clearAIChat() {
-  document.getElementById('aiMessages').innerHTML = '<div class="ai-msg ai-msg-ai">Sohbet temizlendi. Size nasıl yardımcı olabilirim?</div>';
+  const el = document.getElementById('aiMessages');
+  if(el) el.innerHTML = '<div class="ai-msg ai-msg-ai">Sohbet temizlendi. Sorunuzu yazın.</div>';
 }
-function openAISettings() {
-  openModal('AI Hakkında', `
-    <div style="text-align:center;padding:20px;">
-      <div style="font-size:40px;margin-bottom:12px;">🤖</div>
-      <h3>Ekosa AI Asistan</h3>
-      <p style="color:var(--text-secondary);margin:12px 0;">Ücretsiz, internet gerektirmez. CRM verilerinize ve sektör mevzuatına dayalı cevaplar verir.</p>
-      <div style="text-align:left;font-size:12px;color:var(--text-secondary);margin-top:16px;">
-        <p><strong>Sorulabilecek konular:</strong></p>
-        <p>📊 CRM verileri (satışlar, müşteriler, stok)</p>
-        <p>📋 MoTAT, UÇBS sistemleri</p>
-        <p>⚖️ Bitkisel atık yağ yönetmeliği</p>
-        <p>🚛 Taşıma, lisans, TSE belgeleri</p>
-        <p>💰 Cari bakiyeler, borç/alacak</p>
-        <p>⚠️ Cezalar ve yaptırımlar</p>
-      </div>
-    </div>
-  `, '<button class="btn btn-secondary" onclick="closeModal()">Kapat</button>');
-}
+function openAISettings() {}
 
 function aiAsk(text) { document.getElementById('aiInput').value=text; aiSend(); }
 
@@ -5165,8 +5201,7 @@ function aiSend() {
   if(!q) return;
   addAIMessage(q, 'user');
   input.value = '';
-  input.style.height = 'auto';
-  setTimeout(() => { const answer = processAIQuery(q); addAIMessage(answer, 'ai'); }, 200);
+  setTimeout(() => { const answer = processAIQuery(q); addAIMessage(answer, 'ai'); }, 150);
 }
 
 function processAIQuery(q) {
