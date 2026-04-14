@@ -485,12 +485,167 @@ input, select, textarea, button { font-family: var(--font); }
 .fab:hover { transform:scale(1.1); }
 .fab svg { width:24px; height:24px; }
 @media (min-width:769px) { .fab { bottom:24px; right:24px; } }
+
+/* ===== AI CHAT ===== */
+.ai-fab {
+  position:fixed; bottom:80px; right:84px;
+  width:52px; height:52px; border-radius:50%;
+  background:linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color:#fff; border:none; box-shadow:0 4px 16px rgba(102,126,234,0.4);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; z-index:100; transition: all 0.3s ease;
+}
+.ai-fab:hover { transform:scale(1.1); box-shadow:0 6px 24px rgba(102,126,234,0.5); }
+.ai-fab svg { width:24px; height:24px; }
+@media (min-width:769px) { .ai-fab { bottom:24px; right:96px; } }
+.ai-fab-badge {
+  position:absolute; top:-2px; right:-2px;
+  width:14px; height:14px; border-radius:50%;
+  background:#4CAF50; border:2px solid #fff;
+  animation: aipulse 2s infinite;
+}
+@keyframes aipulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+.ai-panel {
+  display:none; position:fixed; z-index:1001;
+  bottom:0; right:0; width:420px; height:100vh;
+  background:var(--bg-card); box-shadow:-4px 0 24px rgba(0,0,0,0.15);
+  flex-direction:column; transition:transform 0.3s ease;
+}
+.ai-panel.show { display:flex; animation:aiSlideIn 0.3s ease; }
+@keyframes aiSlideIn { from{transform:translateX(100%)} to{transform:translateX(0)} }
+@media (max-width:480px) { .ai-panel { width:100vw; } }
+
+.ai-header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 20px; border-bottom:1px solid var(--border);
+  background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:#fff;
+}
+.ai-header-title { font-size:15px; font-weight:700; display:flex; align-items:center; gap:8px; }
+.ai-header-actions { display:flex; gap:8px; }
+.ai-header-btn {
+  background:rgba(255,255,255,0.2); border:none; color:#fff;
+  width:32px; height:32px; border-radius:50%; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  transition:background 0.2s;
+}
+.ai-header-btn:hover { background:rgba(255,255,255,0.3); }
+
+.ai-messages {
+  flex:1; overflow-y:auto; padding:16px 20px;
+  display:flex; flex-direction:column; gap:12px;
+}
+.ai-msg {
+  max-width:92%; padding:10px 14px; border-radius:12px;
+  font-size:13px; line-height:1.6; word-wrap:break-word;
+}
+.ai-msg-user {
+  align-self:flex-end; background:linear-gradient(135deg,#667eea,#764ba2);
+  color:#fff; border-bottom-right-radius:4px;
+}
+.ai-msg-ai {
+  align-self:flex-start; background:var(--bg);
+  color:var(--text); border-bottom-left-radius:4px; border:1px solid var(--border);
+}
+.ai-msg-ai p { margin:6px 0; }
+.ai-msg-ai strong { color:var(--accent); }
+.ai-msg-ai ul { margin:4px 0 4px 16px; }
+.ai-msg-ai li { margin:2px 0; }
+.ai-msg-system {
+  align-self:center; background:transparent; color:var(--text-light);
+  font-size:11px; text-align:center; padding:4px 12px;
+}
+.ai-typing { display:flex; gap:4px; padding:8px 14px; }
+.ai-typing span {
+  width:6px; height:6px; border-radius:50%; background:var(--text-light);
+  animation:typingDot 1.2s infinite;
+}
+.ai-typing span:nth-child(2) { animation-delay:0.2s; }
+.ai-typing span:nth-child(3) { animation-delay:0.4s; }
+@keyframes typingDot { 0%,60%,100%{opacity:0.3;transform:scale(0.8)} 30%{opacity:1;transform:scale(1.1)} }
+
+.ai-input-area {
+  padding:12px 16px; border-top:1px solid var(--border);
+  display:flex; gap:8px; align-items:flex-end;
+}
+.ai-input {
+  flex:1; padding:10px 14px; border:1px solid var(--border);
+  border-radius:20px; font-size:14px; color:var(--text);
+  background:var(--bg); outline:none; resize:none;
+  max-height:100px; min-height:40px; font-family:var(--font);
+}
+.ai-input:focus { border-color:#667eea; }
+.ai-send {
+  width:40px; height:40px; border-radius:50%; border:none;
+  background:linear-gradient(135deg,#667eea,#764ba2);
+  color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  flex-shrink:0; transition:all 0.2s;
+}
+.ai-send:hover { transform:scale(1.05); }
+.ai-send:disabled { opacity:0.5; cursor:not-allowed; }
+
+.ai-suggestions {
+  display:flex; flex-wrap:wrap; gap:6px; padding:0 20px 12px;
+}
+.ai-suggestion {
+  padding:6px 12px; border-radius:16px; font-size:11px;
+  background:var(--bg); border:1px solid var(--border);
+  color:var(--text-secondary); cursor:pointer; transition:all 0.2s;
+}
+.ai-suggestion:hover { border-color:#667eea; color:#667eea; }
 </style>
 </head>
 <body>
 
 <!-- Toast Container -->
 <div class="toast-container" id="toastContainer"></div>
+
+<!-- AI Assistant Button -->
+<button class="ai-fab" id="aiFab" onclick="toggleAIPanel()" title="AI Asistan" style="display:none;">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7 7 0 0 1 7.27 19H6a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5m9 0a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5"/></svg>
+  <div class="ai-fab-badge"></div>
+</button>
+
+<!-- AI Chat Panel -->
+<div class="ai-panel" id="aiPanel">
+  <div class="ai-header">
+    <div class="ai-header-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1.27A7 7 0 0 1 7.27 19H6a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2M7.5 13a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5m9 0a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5"/></svg>
+      Ekosa AI Asistan
+    </div>
+    <div class="ai-header-actions">
+      <button class="ai-header-btn" onclick="clearAIChat()" title="Sohbeti Temizle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </button>
+      <button class="ai-header-btn" onclick="openAISettings()" title="API Ayarları">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      </button>
+      <button class="ai-header-btn" onclick="toggleAIPanel()" title="Kapat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="ai-messages" id="aiMessages">
+    <div class="ai-msg ai-msg-ai">Merhaba! Ben Ekosa AI Asistan. CRM verilerinize dayalı sorularınızı yanıtlayabilirim. Örneğin:<br><br>
+    📊 "Bugün kaç kg topladık?"<br>
+    🏭 "Denizli'deki işletmelerin durumu ne?"<br>
+    💰 "En çok borcu olan müşteriler kimler?"<br>
+    📈 "Bu ayın toplama özeti"<br>
+    🚛 "Araçlardaki stok durumu nedir?"</div>
+  </div>
+  <div class="ai-suggestions" id="aiSuggestions">
+    <div class="ai-suggestion" onclick="aiAsk(this.textContent)">Bugünün özeti</div>
+    <div class="ai-suggestion" onclick="aiAsk(this.textContent)">Gecikmiş ziyaretler</div>
+    <div class="ai-suggestion" onclick="aiAsk(this.textContent)">Toplam stok durumu</div>
+    <div class="ai-suggestion" onclick="aiAsk(this.textContent)">Cari bakiye özeti</div>
+  </div>
+  <div class="ai-input-area">
+    <textarea class="ai-input" id="aiInput" placeholder="Sorunuzu yazın..." rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiSend();}"></textarea>
+    <button class="ai-send" id="aiSendBtn" onclick="aiSend()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</div>
 
 <!-- Print Area -->
 <div id="printArea" style="display:none;"></div>
@@ -717,7 +872,7 @@ input, select, textarea, button { font-family: var(--font); }
             </div>
 
             <!-- Araç Seçimi -->
-            <div class="widget" style="margin-bottom:16px;">
+            <div class="widget" style="margin-bottom:16px;" id="foVehicleWidget">
               <div class="widget-header"><div class="widget-title">🚛 Araç Seçimi</div></div>
               <div class="widget-body">
                 <select class="form-select" id="foVehicle" style="font-size:16px;padding:14px;">
@@ -727,7 +882,7 @@ input, select, textarea, button { font-family: var(--font); }
             </div>
 
             <!-- Alım Durumu -->
-            <div class="widget" style="margin-bottom:16px;">
+            <div class="widget" style="margin-bottom:16px;" id="foAlimWidget">
               <div class="widget-header"><div class="widget-title">⚖️ Alım İşlemi</div></div>
               <div class="widget-body">
                 <div style="display:flex;gap:8px;margin-bottom:16px;">
@@ -802,6 +957,7 @@ input, select, textarea, button { font-family: var(--font); }
             </div>
 
             <!-- ADIM 3: Alım sonrası işlemler (dinamik gösterilir) -->
+            <div id="foSavedSummary" style="display:none;"></div>
             <div id="fo-step3" style="display:none;">
               <!-- Teslim Fişi -->
               <div class="widget" style="margin-bottom:16px;">
@@ -966,10 +1122,27 @@ input, select, textarea, button { font-family: var(--font); }
               Yeni Teklif
             </button>
           </div>
+          <div class="filter-bar">
+            <select class="form-select" id="proposalCityFilter" onchange="renderProposals()"><option value="">Tüm İller</option></select>
+            <select class="form-select" id="proposalStatusFilter" onchange="renderProposals()">
+              <option value="">Tüm Durumlar</option>
+              <option value="pending">Bekliyor</option>
+              <option value="accepted">Kabul</option>
+              <option value="rejected">Reddedildi</option>
+            </select>
+            <select class="form-select" id="proposalFollowFilter" onchange="renderProposals()">
+              <option value="">Tüm Takip</option>
+              <option value="yes">Takip Gerekli</option>
+              <option value="no">Takip Yok</option>
+              <option value="overdue">Süresi Geçmiş</option>
+            </select>
+            <input class="form-input" type="date" id="proposalDateFrom" onchange="renderProposals()" placeholder="Başlangıç">
+            <input class="form-input" type="date" id="proposalDateTo" onchange="renderProposals()" placeholder="Bitiş">
+          </div>
           <div class="widget">
             <div class="data-table-wrap">
               <table class="data-table">
-                <thead><tr><th>Tarih</th><th>İşletme</th><th>Teklif Fiyat</th><th>Takip</th><th>Takip Tarihi</th><th>Durum</th><th>Not</th><th>İşlem</th></tr></thead>
+                <thead><tr><th>Tarih</th><th>İşletme</th><th>İl</th><th>Teklif Fiyat</th><th>Takip</th><th>Takip Tarihi</th><th>Durum</th><th>Not</th><th>İşlem</th></tr></thead>
                 <tbody id="proposalsBody"></tbody>
               </table>
             </div>
@@ -1093,10 +1266,34 @@ input, select, textarea, button { font-family: var(--font); }
         <div class="page" id="page-cariHesap">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
             <h2 style="font-size:16px;">Cari Borç/Alacak Takibi</h2>
-            <select class="form-select" id="cariCustomerFilter" onchange="renderCariHesap()" style="width:auto;min-width:200px;">
-              <option value="">Müşteri Seçin</option>
-            </select>
+            <div style="position:relative;min-width:280px;flex:1;max-width:400px;">
+              <svg style="position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-light);" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input class="form-input" type="text" placeholder="İşletme adı yazarak arayın..." id="cariSearchInput" oninput="cariLiveSearch()" autocomplete="off"
+                style="padding-left:44px;font-size:15px;padding-top:12px;padding-bottom:12px;">
+              <div id="cariSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border);border-top:none;border-radius:0 0 var(--radius-sm) var(--radius-sm);box-shadow:var(--shadow-lg);max-height:250px;overflow-y:auto;z-index:50;"></div>
+            </div>
           </div>
+          <input type="hidden" id="cariSelectedCustomerId" value="">
+          <div id="cariSelectedBanner" style="display:none;background:var(--accent);color:var(--primary-dark);padding:10px 16px;border-radius:var(--radius-sm);margin-bottom:16px;display:none;align-items:center;justify-content:space-between;">
+            <span id="cariSelectedName" style="font-weight:700;"></span>
+            <button class="btn btn-sm" onclick="cariClearSelection()" style="background:rgba(0,0,0,0.15);color:var(--primary-dark);border:none;padding:4px 12px;">✕ Temizle</button>
+          </div>
+          <div class="widget-grid">
+            <div class="widget"><div class="widget-header"><div class="widget-title">Bakiye Özeti</div></div><div class="widget-body" id="cariSummary"></div></div>
+          </div>
+          <div class="widget" style="margin-top:20px;">
+            <div class="widget-header">
+              <div class="widget-title">Hesap Ekstresi</div>
+              <button class="btn btn-sm btn-secondary" onclick="openCariManualModal()">Manuel Düzeltme</button>
+            </div>
+            <div class="data-table-wrap">
+              <table class="data-table">
+                <thead><tr><th>Tarih</th><th>İşlem</th><th>Açıklama</th><th>Borç</th><th>Alacak</th><th>Bakiye</th></tr></thead>
+                <tbody id="cariBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
           <div class="widget-grid">
             <div class="widget"><div class="widget-header"><div class="widget-title">Bakiye Özeti</div></div><div class="widget-body" id="cariSummary"></div></div>
           </div>
@@ -1476,6 +1673,28 @@ async function syncToFirestore() {
   }
 }
 
+async function deleteFromFirestore(collection, id) {
+  if(!isFirebaseReady) return;
+  try {
+    await db.collection(collection).doc(id).delete();
+  } catch(e) {
+    console.warn('Firestore delete error:', collection, id, e);
+  }
+}
+
+async function deleteMultipleFromFirestore(collection, ids) {
+  if(!isFirebaseReady || !ids || ids.length === 0) return;
+  try {
+    const batch = db.batch();
+    ids.forEach(id => {
+      batch.delete(db.collection(collection).doc(id));
+    });
+    await batch.commit();
+  } catch(e) {
+    console.warn('Firestore batch delete error:', collection, e);
+  }
+}
+
 async function loadFromFirestore() {
   if(!isFirebaseReady) return;
   try {
@@ -1599,11 +1818,17 @@ function showApp() {
   });
 
   loadData();
+  // Load saved user extensions
+  try {
+    const savedUsers = JSON.parse(localStorage.getItem('ekosa_users_ext')||'{}');
+    Object.entries(savedUsers).forEach(([email, data]) => { USER_MAP[email] = data; });
+  } catch(e){}
   applyTheme();
   populateCityFilters();
   navigateTo('dashboard');
   setupRealtimeListeners();
   updateSyncStatus();
+  showAIButton();
 }
 
 // ============================================================
@@ -1711,7 +1936,7 @@ window.addEventListener('offline', updateSyncStatus);
 // ============================================================
 function populateCityFilters() {
   const selectors = ['customerCityFilter','foCityFilter','visitCityFilter','cityTrackFilter','receiptCityFilter',
-    'tediyeCityFilter','notesCityFilter','reportCityFilter'];
+    'tediyeCityFilter','notesCityFilter','reportCityFilter','proposalCityFilter'];
   selectors.forEach(id => {
     const el = document.getElementById(id);
     if(!el) return;
@@ -1722,14 +1947,6 @@ function populateCityFilters() {
     });
     el.value = val;
   });
-  // Cari customer filter
-  const cariFilter = document.getElementById('cariCustomerFilter');
-  if(cariFilter) {
-    cariFilter.innerHTML = '<option value="">Müşteri Seçin</option>';
-    APP.data.customers.forEach(c => {
-      cariFilter.innerHTML += `<option value="${c.id}">${c.name}</option>`;
-    });
-  }
 }
 
 // ============================================================
@@ -1773,6 +1990,14 @@ function renderDashboard() {
 
   // Proposals with follow-up today
   const followUpProposals = APP.data.proposals.filter(p => p.followUp && p.followUpDate === todayStr);
+
+  // Proposals with follow-up approaching (within 3 days including overdue)
+  const upcomingFollowUps = APP.data.proposals.filter(p => {
+    if(!p.followUp || !p.followUpDate || p.status === 'accepted' || p.status === 'rejected') return false;
+    if(p.followUpDate === todayStr) return false; // already shown in followUpProposals
+    const daysUntil = daysBetween(todayStr, p.followUpDate);
+    return daysUntil >= -7 && daysUntil <= 3; // overdue up to 7 days + upcoming 3 days
+  }).sort((a,b) => a.followUpDate.localeCompare(b.followUpDate));
 
   // Contract expiring in 7 days
   const expiringContracts = APP.data.customers.filter(c => {
@@ -1870,7 +2095,7 @@ function renderDashboard() {
     <!-- Teklif Takip -->
     <div class="widget">
       <div class="widget-header">
-        <div class="widget-title">📌 Teklif Takip ${followUpProposals.length ? `<span class="widget-badge warning">${followUpProposals.length}</span>`:''}</div>
+        <div class="widget-title">📌 Teklif Takip (Bugün) ${followUpProposals.length ? `<span class="widget-badge warning">${followUpProposals.length}</span>`:''}</div>
       </div>
       <div class="widget-body">
         ${followUpProposals.length ? followUpProposals.map(p => `
@@ -1882,6 +2107,28 @@ function renderDashboard() {
             <div class="wlist-right"><span class="wlist-tag tag-yellow">Takip</span></div>
           </div>
         `).join('') : '<div class="widget-empty">Bugün takip edilecek teklif yok</div>'}
+      </div>
+    </div>
+
+    <!-- Teklif Takip Yaklaşanlar -->
+    <div class="widget">
+      <div class="widget-header">
+        <div class="widget-title">⏰ Teklif Takip Yaklaşanlar ${upcomingFollowUps.length ? `<span class="widget-badge warning">${upcomingFollowUps.length}</span>`:''}</div>
+      </div>
+      <div class="widget-body">
+        ${upcomingFollowUps.length ? upcomingFollowUps.map(p => {
+          const daysUntil = daysBetween(todayStr, p.followUpDate);
+          const tagClass = daysUntil < 0 ? 'tag-red' : daysUntil === 0 ? 'tag-yellow' : 'tag-green';
+          const tagText = daysUntil < 0 ? Math.abs(daysUntil)+' gün gecikmiş' : daysUntil === 0 ? 'Bugün' : daysUntil+' gün';
+          return `
+          <div class="wlist-item" style="cursor:pointer;" onclick="navigateTo('proposals')">
+            <div class="wlist-left">
+              <div class="wlist-name">${p.businessName}</div>
+              <div class="wlist-sub">Teklif: ${formatMoney(p.price)}/kg — Takip: ${formatDate(p.followUpDate)}</div>
+            </div>
+            <div class="wlist-right"><span class="wlist-tag ${tagClass}">${tagText}</span></div>
+          </div>`;
+        }).join('') : '<div class="widget-empty">Yaklaşan takip yok ✓</div>'}
       </div>
     </div>
 
@@ -2083,6 +2330,7 @@ function saveCustomer(id) {
 function deleteCustomer(id) {
   if(!confirm('Bu müşteriyi silmek istediğinize emin misiniz?')) return;
   APP.data.customers = APP.data.customers.filter(c=>c.id!==id);
+  deleteFromFirestore('customers', id);
   saveData(); closeModal(); renderCustomers();
   toast('Müşteri silindi');
 }
@@ -2225,11 +2473,16 @@ function foSelectCustomer(id) {
   document.querySelectorAll('.fo-pricetype-btn').forEach(b=>b.className='btn btn-secondary fo-pricetype-btn');
   document.getElementById('foPTNakit').className = 'btn btn-primary fo-pricetype-btn';
 
-  // Reset buttons
+  // Reset buttons and widgets visibility
+  document.getElementById('foAlimWidget').style.display = '';
+  document.getElementById('foVehicleWidget').style.display = '';
+  document.getElementById('foBtnCollected').style.display = '';
+  document.getElementById('foBtnNotCollected').style.display = '';
   document.getElementById('foBtnCollected').className = 'btn btn-primary';
   document.getElementById('foBtnNotCollected').className = 'btn btn-secondary';
   document.getElementById('foCollectedForm').style.display = 'none';
   document.getElementById('foNotCollectedForm').style.display = 'none';
+  document.getElementById('foSavedSummary').style.display = 'none';
 
   // Reset fill buttons
   document.querySelectorAll('.fo-fill-btn').forEach(b => b.className = 'btn btn-secondary fo-fill-btn');
@@ -2316,7 +2569,7 @@ function foSaveCollection() {
   APP.data.receipts.push(receipt);
   foState.lastReceipt = receipt;
 
-  // Create visit
+  // Create visit (GPS will be added later to not block UI)
   const visit = {
     id: uid(), customerId: c.id, customerName: c.name,
     city: c.city||'', date: today(), collected: true,
@@ -2326,15 +2579,6 @@ function foSaveCollection() {
     personnelName: APP.currentUser?.name||'',
     gps:null, createdAt: new Date().toISOString()
   };
-
-  // GPS
-  if(navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(pos => {
-      visit.gps = {lat:pos.coords.latitude, lng:pos.coords.longitude};
-      saveData();
-    }, ()=>{});
-  }
-
   APP.data.visits.push(visit);
   foState.lastVisit = visit;
 
@@ -2353,45 +2597,91 @@ function foSaveCollection() {
 
   saveData();
 
-  // Show step 3 (fiş yazdır + ödeme)
+  // ====== UI UPDATE — ÖNCELİKLİ ======
+  // 1) Hide entire alım and araç widgets
+  try { document.getElementById('foAlimWidget').style.display = 'none'; } catch(e){}
+  try { document.getElementById('foVehicleWidget').style.display = 'none'; } catch(e){}
+
+  // 2) Show saved summary banner
+  const summaryEl = document.getElementById('foSavedSummary');
+  summaryEl.innerHTML = `
+    <div style="background:rgba(76,175,80,0.12);border:2px solid var(--success);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+        <span style="font-size:24px;">✅</span>
+        <div>
+          <div style="font-weight:700;font-size:15px;color:var(--success);">Alım Kaydedildi</div>
+          <div style="font-size:12px;color:var(--text-secondary);">${receiptNo}</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:14px;">
+        <span>📦 <strong>${qty} kg</strong></span>
+        <span>💵 <strong>${formatMoney(price)}/kg</strong></span>
+        <span>💰 <strong>${formatMoney(subtotal+kdv)}</strong></span>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(76,175,80,0.2);font-size:13px;color:var(--text-secondary);">
+        ⬇️ Aşağıdan ödeme işlemini tamamlayın ve teslim fişi yazdırın
+      </div>
+    </div>
+  `;
+  summaryEl.style.display = '';
+
+  // 3) Show step 3
   document.getElementById('fo-step3').style.display = '';
   document.getElementById('foTediyeSection').style.display = 'none';
   document.getElementById('fo-complete').style.display = 'none';
 
-  // Pre-fill payment amount
+  // 4) Pre-fill payment
   document.getElementById('foPayAmount').value = (subtotal+kdv).toFixed(2);
+  if(c.fuelCardNo) document.getElementById('foFuelCardNo').textContent = c.fuelCardNo;
 
-  // Fuel card info
-  if(c.fuelCardNo) {
-    document.getElementById('foFuelCardNo').textContent = c.fuelCardNo;
-  }
-
-  // Reset payment buttons
+  // 5) Reset & pre-select payment type
   document.querySelectorAll('.fo-pay-btn').forEach(b=>b.className='btn btn-secondary fo-pay-btn');
   document.querySelectorAll('.fo-vade-btn').forEach(b=>b.className='btn btn-secondary fo-vade-btn');
   document.getElementById('foPaymentDetails').style.display = 'none';
   document.getElementById('foFuelCardInfo').style.display = 'none';
   foState.paymentType = null;
 
-  toast('✅ Alım kaydedildi: ' + receiptNo);
+  try {
+    const payBtns = document.querySelectorAll('.fo-pay-btn');
+    if(foState.priceType === 'nakit' && payBtns[0]) {
+      payBtns[0].className = 'btn btn-primary fo-pay-btn';
+      foState.paymentType = 'nakit';
+      document.getElementById('foPaymentDetails').style.display = '';
+    } else if(foState.priceType === 'yakit_karti' && payBtns[2]) {
+      payBtns[2].className = 'btn btn-primary fo-pay-btn';
+      foState.paymentType = 'yakit_karti';
+      document.getElementById('foPaymentDetails').style.display = '';
+      document.getElementById('foFuelCardInfo').style.display = c.fuelCardNo ? '' : 'none';
+    }
+  } catch(e) { console.warn('Payment pre-select error:', e); }
 
-  // Pre-select payment type based on price type
-  document.querySelectorAll('.fo-pay-btn').forEach(b=>b.className='btn btn-secondary fo-pay-btn');
-  if(foState.priceType === 'nakit') {
-    document.querySelector('.fo-pay-btn:nth-child(1)').className = 'btn btn-primary fo-pay-btn';
-    foState.paymentType = 'nakit';
-    document.getElementById('foPaymentDetails').style.display = '';
-    document.getElementById('foFuelCardInfo').style.display = 'none';
-  } else if(foState.priceType === 'yakit_karti') {
-    document.querySelector('.fo-pay-btn:nth-child(3)').className = 'btn btn-primary fo-pay-btn';
-    foState.paymentType = 'yakit_karti';
-    document.getElementById('foPaymentDetails').style.display = '';
-    document.getElementById('foFuelCardInfo').style.display = c.fuelCardNo ? '' : 'none';
-  } else {
-    foState.paymentType = null;
-    document.getElementById('foPaymentDetails').style.display = 'none';
-  }
-  document.getElementById('fo-step3').scrollIntoView({behavior:'smooth'});
+  // 6) Scroll to summary+step3 (multiple strategies for mobile)
+  setTimeout(() => {
+    try {
+      const target = document.getElementById('foSavedSummary');
+      if(target) {
+        target.scrollIntoView({behavior:'smooth', block:'start'});
+        // Fallback: also scroll contentArea
+        const contentArea = document.getElementById('contentArea');
+        if(contentArea) {
+          const rect = target.getBoundingClientRect();
+          const cRect = contentArea.getBoundingClientRect();
+          contentArea.scrollTo({top: contentArea.scrollTop + rect.top - cRect.top - 10, behavior:'smooth'});
+        }
+      }
+    } catch(e) { console.warn('Scroll error:', e); }
+  }, 400);
+
+  // 7) GPS — son sırada, UI'ı bloke etmemesi için
+  setTimeout(() => {
+    if(navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => { visit.gps = {lat:pos.coords.latitude, lng:pos.coords.longitude}; saveData(); },
+        () => {},
+        {timeout: 5000, maximumAge: 60000}
+      );
+    }
+  }, 1000);
 }
 
 function foSaveNotCollected() {
@@ -2410,10 +2700,6 @@ function foSaveNotCollected() {
     personnelName: APP.currentUser?.name||'',
     gps:null, createdAt: new Date().toISOString()
   };
-
-  if(navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(pos => { visit.gps={lat:pos.coords.latitude,lng:pos.coords.longitude}; saveData(); }, ()=>{});
-  }
 
   APP.data.visits.push(visit);
 
@@ -2440,6 +2726,16 @@ function foSaveNotCollected() {
   document.getElementById('fo-step3').style.display = 'none';
   document.getElementById('fo-complete').style.display = '';
   document.getElementById('foCompleteInfo').textContent = `${c.name} — Alım yapılmadı (${foState.fillLevel})`;
+
+  // GPS — UI güncellemelerinden sonra
+  setTimeout(() => {
+    if(navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => { visit.gps={lat:pos.coords.latitude,lng:pos.coords.longitude}; saveData(); },
+        ()=>{}, {timeout:5000, maximumAge:60000}
+      );
+    }
+  }, 500);
 }
 
 function foPrintReceipt() {
@@ -2668,6 +2964,7 @@ function renderVisits() {
     <td>${payments}</td>
     <td>${v.personnelName||'-'}</td>
     <td>
+      <button class="btn btn-sm btn-secondary" onclick="openEditVisitModal('${v.id}')">Düzenle</button>
       <button class="btn btn-sm btn-danger" onclick="deleteVisit('${v.id}')">Sil</button>
       ${receipt ? '<button class="btn btn-sm btn-danger" onclick="deleteReceipt(\''+receipt.id+'\')">Makbuz Sil</button>' : ''}
     </td>
@@ -2679,8 +2976,79 @@ function filterVisits() { renderVisits(); }
 function deleteVisit(id) {
   if(!confirm('Bu ziyaret kaydını silmek istediğinize emin misiniz?')) return;
   APP.data.visits = APP.data.visits.filter(v=>v.id!==id);
+  deleteFromFirestore('visits', id);
   saveData(); renderVisits();
   toast('Ziyaret kaydı silindi');
+}
+
+function openEditVisitModal(id) {
+  const v = APP.data.visits.find(x=>x.id===id);
+  if(!v) return;
+  const body = `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Tarih</label><input class="form-input" type="date" id="mVisDate" value="${v.date||''}"></div>
+      <div class="form-group"><label class="form-label">İşletme</label><input class="form-input" id="mVisCustomerName" value="${v.customerName||''}" readonly style="background:var(--bg);"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Durum</label>
+      <select class="form-select" id="mVisCollected" onchange="toggleVisitEditFields()">
+        <option value="true" ${v.collected?'selected':''}>Alım Yapıldı</option>
+        <option value="false" ${!v.collected?'selected':''}>Alım Yapılmadı</option>
+      </select>
+    </div>
+    <div id="visitEditCollectedFields" style="${v.collected?'':'display:none'}">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Miktar (kg)</label><input class="form-input" type="number" id="mVisQty" value="${v.quantity||0}" min="0"></div>
+        <div class="form-group"><label class="form-label">Fiyat (₺/kg)</label><input class="form-input" type="number" step="0.01" id="mVisPrice" value="${v.price||0}"></div>
+      </div>
+    </div>
+    <div id="visitEditNotCollectedFields" style="${!v.collected?'':'display:none'}">
+      <div class="form-group"><label class="form-label">Doluluk Oranı</label>
+        <select class="form-select" id="mVisFill">
+          <option value="%0" ${v.fillLevel==='%0'?'selected':''}>%0 Boş</option>
+          <option value="%25" ${v.fillLevel==='%25'?'selected':''}>%25 Çeyrek</option>
+          <option value="%50" ${v.fillLevel==='%50'?'selected':''}>%50 Yarım</option>
+          <option value="%75" ${v.fillLevel==='%75'?'selected':''}>%75 3/4</option>
+          <option value="%100" ${v.fillLevel==='%100'?'selected':''}>%100 Dolu</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Sebep / Not</label><textarea class="form-textarea" id="mVisReason" rows="2">${v.reason||''}</textarea></div>
+    </div>
+    <div class="form-group"><label class="form-label">Not</label><textarea class="form-textarea" id="mVisNote" rows="2">${v.note||''}</textarea></div>
+    <div class="form-group"><label class="form-label">Personel</label><input class="form-input" id="mVisPersonnel" value="${v.personnelName||''}"></div>
+  `;
+  openModal('Ziyaret Düzenle', body, `
+    <button class="btn btn-secondary" onclick="closeModal()">İptal</button>
+    <button class="btn btn-primary" onclick="saveEditVisit('${id}')">Kaydet</button>
+  `);
+}
+
+function toggleVisitEditFields() {
+  const collected = document.getElementById('mVisCollected').value === 'true';
+  document.getElementById('visitEditCollectedFields').style.display = collected ? '' : 'none';
+  document.getElementById('visitEditNotCollectedFields').style.display = !collected ? '' : 'none';
+}
+
+function saveEditVisit(id) {
+  const idx = APP.data.visits.findIndex(v=>v.id===id);
+  if(idx<0) return;
+  const collected = document.getElementById('mVisCollected').value === 'true';
+  APP.data.visits[idx].date = document.getElementById('mVisDate').value;
+  APP.data.visits[idx].collected = collected;
+  APP.data.visits[idx].note = document.getElementById('mVisNote').value;
+  APP.data.visits[idx].personnelName = document.getElementById('mVisPersonnel').value;
+  if(collected) {
+    APP.data.visits[idx].quantity = parseFloat(document.getElementById('mVisQty').value)||0;
+    APP.data.visits[idx].price = parseFloat(document.getElementById('mVisPrice').value)||0;
+    APP.data.visits[idx].fillLevel = '';
+    APP.data.visits[idx].reason = '';
+  } else {
+    APP.data.visits[idx].quantity = 0;
+    APP.data.visits[idx].price = 0;
+    APP.data.visits[idx].fillLevel = document.getElementById('mVisFill').value;
+    APP.data.visits[idx].reason = document.getElementById('mVisReason').value;
+  }
+  saveData(); closeModal(); renderVisits();
+  toast('Ziyaret güncellendi');
 }
 
 function deleteReceipt(id) {
@@ -2688,9 +3056,13 @@ function deleteReceipt(id) {
   const receipt = APP.data.receipts.find(r=>r.id===id);
   if(receipt) {
     // Remove related cari transactions
+    const removedCari = APP.data.cariTransactions.filter(t => t.description?.indexOf(receipt.receiptNo)!==-1);
     APP.data.cariTransactions = APP.data.cariTransactions.filter(t => t.description?.indexOf(receipt.receiptNo)===-1);
+    deleteMultipleFromFirestore('cariTransactions', removedCari.map(t=>t.id));
     // Remove related tediye
+    const removedTediye = APP.data.tediye.filter(t => t.receiptId === id);
     APP.data.tediye = APP.data.tediye.filter(t => t.receiptId !== id);
+    deleteMultipleFromFirestore('tediye', removedTediye.map(t=>t.id));
     // Reverse vehicle stock if needed
     if(receipt.vehicleId) {
       const v = APP.data.vehicles.find(x=>x.id===receipt.vehicleId);
@@ -2698,6 +3070,7 @@ function deleteReceipt(id) {
     }
   }
   APP.data.receipts = APP.data.receipts.filter(r=>r.id!==id);
+  deleteFromFirestore('receipts', id);
   saveData(); renderVisits(); renderReceipts();
   toast('Makbuz ve ilgili kayıtlar silindi');
 }
@@ -2705,6 +3078,7 @@ function deleteReceipt(id) {
 function deleteTediye(id) {
   if(!confirm('Bu tediye makbuzunu silmek istediğinize emin misiniz?')) return;
   APP.data.tediye = APP.data.tediye.filter(t=>t.id!==id);
+  deleteFromFirestore('tediye', id);
   saveData(); renderReceipts();
   toast('Tediye makbuzu silindi');
 }
@@ -2750,20 +3124,47 @@ function renderCityTracking() {
 // ============================================================
 function renderProposals() {
   const tbody = document.getElementById('proposalsBody');
-  const proposals = [...APP.data.proposals].sort((a,b)=>b.date.localeCompare(a.date));
-  tbody.innerHTML = proposals.map(p => `<tr>
+  let proposals = [...APP.data.proposals].sort((a,b)=>b.date.localeCompare(a.date));
+
+  // Apply filters
+  const cityF = document.getElementById('proposalCityFilter')?.value || '';
+  const statusF = document.getElementById('proposalStatusFilter')?.value || '';
+  const followF = document.getElementById('proposalFollowFilter')?.value || '';
+  const dateFrom = document.getElementById('proposalDateFrom')?.value || '';
+  const dateTo = document.getElementById('proposalDateTo')?.value || '';
+
+  if(cityF) {
+    proposals = proposals.filter(p => {
+      const cust = APP.data.customers.find(c=>c.id===p.customerId);
+      return cust?.city === cityF;
+    });
+  }
+  if(statusF) proposals = proposals.filter(p => p.status === statusF);
+  if(followF === 'yes') proposals = proposals.filter(p => p.followUp);
+  else if(followF === 'no') proposals = proposals.filter(p => !p.followUp);
+  else if(followF === 'overdue') proposals = proposals.filter(p => p.followUp && p.followUpDate && p.followUpDate < today());
+  if(dateFrom) proposals = proposals.filter(p => p.date >= dateFrom);
+  if(dateTo) proposals = proposals.filter(p => p.date <= dateTo);
+
+  tbody.innerHTML = proposals.map(p => {
+    const cust = APP.data.customers.find(c=>c.id===p.customerId);
+    const city = cust?.city || '';
+    const isOverdue = p.followUp && p.followUpDate && p.followUpDate < today();
+    return `<tr>
     <td>${formatDate(p.date)}</td>
     <td>${p.businessName}</td>
+    <td>${city||'-'}</td>
     <td>${formatMoney(p.price)}/kg</td>
     <td>${p.followUp ? '✅ Evet' : '-'}</td>
-    <td>${p.followUpDate ? formatDate(p.followUpDate) : '-'}</td>
+    <td>${p.followUpDate ? formatDate(p.followUpDate) : '-'} ${isOverdue?'<span class="wlist-tag tag-red" style="font-size:10px;">Gecikmiş</span>':''}</td>
     <td><span class="status ${p.status==='accepted'?'status-done':p.status==='rejected'?'status-cancelled':'status-pending'}">${p.status==='accepted'?'Kabul':p.status==='rejected'?'Reddedildi':'Bekliyor'}</span></td>
     <td>${p.note||'-'}</td>
     <td>
       <button class="btn btn-sm btn-secondary" onclick="openProposalModal('${p.id}')">Düzenle</button>
       <button class="btn btn-sm btn-danger" onclick="deleteProposal('${p.id}')">Sil</button>
     </td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 
 function openProposalModal(id) {
@@ -2834,6 +3235,7 @@ function saveProposal(id) {
   const data = {
     customerId: customerId || null,
     businessName,
+    city: customerId ? APP.data.customers.find(x=>x.id===customerId)?.city || '' : '',
     price: parseFloat(document.getElementById('mPropPrice').value)||0,
     date: document.getElementById('mPropDate').value || today(),
     followUp: document.getElementById('mPropFollowUp').value === 'yes',
@@ -2856,6 +3258,7 @@ function saveProposal(id) {
 function deleteProposal(id) {
   if(!confirm('Bu teklifi silmek istediğinize emin misiniz?')) return;
   APP.data.proposals = APP.data.proposals.filter(p=>p.id!==id);
+  deleteFromFirestore('proposals', id);
   saveData(); renderProposals();
   toast('Teklif silindi');
 }
@@ -2872,7 +3275,15 @@ function switchReceiptTab(tab) {
 
 function renderReceipts() {
   const tbody = document.getElementById('receiptsBody');
-  const receipts = [...APP.data.receipts].sort((a,b)=>b.date.localeCompare(a.date));
+  let receipts = [...APP.data.receipts].sort((a,b)=>b.date.localeCompare(a.date));
+  // Apply filters
+  const dateFrom = document.getElementById('receiptDateFrom')?.value || '';
+  const dateTo = document.getElementById('receiptDateTo')?.value || '';
+  const cityF = document.getElementById('receiptCityFilter')?.value || '';
+  if(dateFrom) receipts = receipts.filter(r=>r.date>=dateFrom);
+  if(dateTo) receipts = receipts.filter(r=>r.date<=dateTo);
+  if(cityF) receipts = receipts.filter(r=>r.city===cityF);
+
   tbody.innerHTML = receipts.map(r => `<tr>
     <td>${r.receiptNo}</td>
     <td>${formatDate(r.date)}</td>
@@ -2881,17 +3292,24 @@ function renderReceipts() {
     <td>${formatMoney(r.unitPrice)}/kg</td>
     <td>${formatMoney(r.total)}</td>
     <td>${formatMoney(r.kdv)}</td>
-    <td>${r.paymentMethods?.map(pm=>pm.type+': '+formatMoney(pm.amount)).join(', ')||r.paymentType||'-'}</td>
-    <td>
-      <button class="btn btn-sm btn-secondary" onclick="printReceipt('${r.id}','56')">56mm</button>
-      <button class="btn btn-sm btn-secondary" onclick="printReceipt('${r.id}','80')">80mm</button>
-      <button class="btn btn-sm btn-danger" onclick="deleteReceipt('${r.id}')">Sil</button>
+    <td>${r.paymentMethods?.map(pm=>(pm.type==='nakit'?'💵':pm.type==='eft'?'🏦':'⛽')+' '+formatMoney(pm.amount)).join(', ')||'-'}</td>
+    <td style="white-space:nowrap;">
+      <button class="btn btn-sm btn-secondary" onclick="openEditReceiptModal('${r.id}')">✏️</button>
+      <button class="btn btn-sm btn-primary" onclick="printReceiptRawBT('${r.id}')">🖨️</button>
+      <button class="btn btn-sm btn-danger" onclick="deleteReceipt('${r.id}')">🗑️</button>
     </td>
   </tr>`).join('');
 
   // Tediye
   const tediyeBody = document.getElementById('tediyeBody');
-  const tediye = [...APP.data.tediye].sort((a,b)=>b.date.localeCompare(a.date));
+  let tediye = [...APP.data.tediye].sort((a,b)=>b.date.localeCompare(a.date));
+  const tedDateFrom = document.getElementById('tediyeDateFrom')?.value || '';
+  const tedDateTo = document.getElementById('tediyeDateTo')?.value || '';
+  const tedCityF = document.getElementById('tediyeCityFilter')?.value || '';
+  if(tedDateFrom) tediye = tediye.filter(t=>t.date>=tedDateFrom);
+  if(tedDateTo) tediye = tediye.filter(t=>t.date<=tedDateTo);
+  if(tedCityF) tediye = tediye.filter(t=>t.city===tedCityF);
+
   tediyeBody.innerHTML = tediye.map(t => `<tr>
     <td>${t.tediyeNo}</td>
     <td>${formatDate(t.date)}</td>
@@ -2899,15 +3317,364 @@ function renderReceipts() {
     <td>${t.personTC}</td>
     <td>${t.city||'-'} / ${t.district||'-'}</td>
     <td>${formatMoney(t.amount)}</td>
-    <td>
-      <button class="btn btn-sm btn-secondary" onclick="printTediye('${t.id}','56')">56mm</button>
-      <button class="btn btn-sm btn-secondary" onclick="printTediye('${t.id}','80')">80mm</button>
-      <button class="btn btn-sm btn-danger" onclick="deleteTediye('${t.id}')">Sil</button>
+    <td style="white-space:nowrap;">
+      <button class="btn btn-sm btn-secondary" onclick="openEditTediyeModal('${t.id}')">✏️</button>
+      <button class="btn btn-sm btn-primary" onclick="printTediyeRawBT('${t.id}')">🖨️</button>
+      <button class="btn btn-sm btn-danger" onclick="deleteTediye('${t.id}')">🗑️</button>
     </td>
   </tr>`).join('');
 }
 function filterReceipts() { renderReceipts(); }
 function filterTediye() { renderReceipts(); }
+
+// Edit Receipt Modal
+function openEditReceiptModal(id) {
+  const r = APP.data.receipts.find(x=>x.id===id);
+  if(!r) return;
+  const body = `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Makbuz No</label><input class="form-input" id="mEditRecNo" value="${r.receiptNo}" readonly style="background:var(--bg);"></div>
+      <div class="form-group"><label class="form-label">Tarih</label><input class="form-input" type="date" id="mEditRecDate" value="${r.date||''}"></div>
+    </div>
+    <div class="form-group"><label class="form-label">İşletme</label>
+      <select class="form-select" id="mEditRecCustomer">
+        ${APP.data.customers.map(c=>`<option value="${c.id}" ${c.id===r.customerId?'selected':''}>${c.name} (${c.city||''})</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-row-3">
+      <div class="form-group"><label class="form-label">Miktar (kg)</label><input class="form-input" type="number" id="mEditRecQty" value="${r.quantity||0}" min="0" oninput="calcEditReceiptTotal()"></div>
+      <div class="form-group"><label class="form-label">Birim Fiyat (₺/kg)</label><input class="form-input" type="number" step="0.01" id="mEditRecPrice" value="${r.unitPrice||0}" oninput="calcEditReceiptTotal()"></div>
+      <div class="form-group"><label class="form-label">Genel Toplam</label><input class="form-input" id="mEditRecGrandTotal" value="${(r.grandTotal||0).toFixed(2)}" readonly style="font-weight:700;background:var(--bg);"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Fiş Basım Tipi</label>
+      <select class="form-select" id="mEditRecPrintType"><option value="fiyatli" ${r.printType!=='fiyatsiz'?'selected':''}>Fiyatlı</option><option value="fiyatsiz" ${r.printType==='fiyatsiz'?'selected':''}>Fiyatsız</option></select>
+    </div>
+  `;
+  openModal('Makbuz Düzenle — ' + r.receiptNo, body, `
+    <button class="btn btn-secondary" onclick="closeModal()">İptal</button>
+    <button class="btn btn-primary" onclick="saveEditReceipt('${id}')">Kaydet</button>
+  `, '600px');
+}
+
+function calcEditReceiptTotal() {
+  const qty = parseFloat(document.getElementById('mEditRecQty')?.value)||0;
+  const price = parseFloat(document.getElementById('mEditRecPrice')?.value)||0;
+  const total = qty * price;
+  const kdv = total * 0.20;
+  document.getElementById('mEditRecGrandTotal').value = (total + kdv).toFixed(2);
+}
+
+function saveEditReceipt(id) {
+  const idx = APP.data.receipts.findIndex(r=>r.id===id);
+  if(idx<0) return;
+  const customerId = document.getElementById('mEditRecCustomer').value;
+  const customer = APP.data.customers.find(c=>c.id===customerId);
+  const qty = parseFloat(document.getElementById('mEditRecQty').value)||0;
+  const price = parseFloat(document.getElementById('mEditRecPrice').value)||0;
+  const total = qty * price;
+  const kdv = total * 0.20;
+
+  APP.data.receipts[idx].date = document.getElementById('mEditRecDate').value;
+  APP.data.receipts[idx].customerId = customerId;
+  APP.data.receipts[idx].customerName = customer?.name||'';
+  APP.data.receipts[idx].city = customer?.city||'';
+  APP.data.receipts[idx].district = customer?.district||'';
+  APP.data.receipts[idx].quantity = qty;
+  APP.data.receipts[idx].unitPrice = price;
+  APP.data.receipts[idx].total = total;
+  APP.data.receipts[idx].kdv = kdv;
+  APP.data.receipts[idx].grandTotal = total + kdv;
+  APP.data.receipts[idx].printType = document.getElementById('mEditRecPrintType').value;
+
+  saveData(); closeModal(); renderReceipts();
+  toast('Makbuz güncellendi');
+}
+
+// Edit Tediye Modal
+function openEditTediyeModal(id) {
+  const t = APP.data.tediye.find(x=>x.id===id);
+  if(!t) return;
+  const body = `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Makbuz No</label><input class="form-input" value="${t.tediyeNo}" readonly style="background:var(--bg);"></div>
+      <div class="form-group"><label class="form-label">Tarih</label><input class="form-input" type="date" id="mEditTedDate" value="${t.date||''}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Ad Soyad *</label><input class="form-input" id="mEditTedName" value="${t.personName||''}"></div>
+      <div class="form-group"><label class="form-label">TC Kimlik</label><input class="form-input" id="mEditTedTC" value="${t.personTC||''}" maxlength="11"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Tutar (₺)</label><input class="form-input" type="number" step="0.01" id="mEditTedAmount" value="${t.amount||0}"></div>
+      <div class="form-group"><label class="form-label">İl/İlçe</label><input class="form-input" id="mEditTedCity" value="${(t.city||'')+(t.district?' / '+t.district:'')}"></div>
+    </div>
+  `;
+  openModal('Tediye Düzenle — ' + t.tediyeNo, body, `
+    <button class="btn btn-secondary" onclick="closeModal()">İptal</button>
+    <button class="btn btn-primary" onclick="saveEditTediye('${id}')">Kaydet</button>
+  `);
+}
+
+function saveEditTediye(id) {
+  const idx = APP.data.tediye.findIndex(t=>t.id===id);
+  if(idx<0) return;
+  APP.data.tediye[idx].date = document.getElementById('mEditTedDate').value;
+  APP.data.tediye[idx].personName = document.getElementById('mEditTedName').value.trim();
+  APP.data.tediye[idx].personTC = document.getElementById('mEditTedTC').value.trim();
+  APP.data.tediye[idx].amount = parseFloat(document.getElementById('mEditTedAmount').value)||0;
+  const cityParts = document.getElementById('mEditTedCity').value.split('/').map(s=>s.trim());
+  APP.data.tediye[idx].city = cityParts[0]||'';
+  APP.data.tediye[idx].district = cityParts[1]||'';
+  saveData(); closeModal(); renderReceipts();
+  toast('Tediye güncellendi');
+}
+
+// RawBT Print Functions - generates receipt HTML and opens via RawBT intent
+// Turkish number to words
+function tutarYaziyaCevir(n) {
+  if(!n || n<=0) return 'Sifir';
+  const birler=['','Bir','Iki','Uc','Dort','Bes','Alti','Yedi','Sekiz','Dokuz'];
+  const onlar=['','On','Yirmi','Otuz','Kirk','Elli','Altmis','Yetmis','Seksen','Doksan'];
+  const num = Math.floor(n);
+  if(num>=1000000) return num.toLocaleString('tr-TR');
+  let s='';
+  const binler=Math.floor(num/1000);
+  const kalan=num%1000;
+  if(binler>0) { if(binler===1) s+='Bin'; else { const yuz=Math.floor(binler/100); const on=Math.floor((binler%100)/10); const bir=binler%10; if(yuz>0) s+=(yuz===1?'':birler[yuz])+'Yuz'; s+=onlar[on]+birler[bir]+'Bin'; }}
+  const yuz=Math.floor(kalan/100); const on=Math.floor((kalan%100)/10); const bir=kalan%10;
+  if(yuz>0) s+=(yuz===1?'':birler[yuz])+'Yuz';
+  s+=onlar[on]+birler[bir];
+  return s||'Sifir';
+}
+
+function generateReceiptHTML(id, size) {
+  const r = APP.data.receipts.find(x=>x.id===id);
+  if(!r) return '';
+  const is80 = size === '80';
+  const showPrice = r.printType !== 'fiyatsiz';
+  const w = is80 ? 48 : 32; // char width
+  const eq = is80 ? '=' .repeat(48) : '='.repeat(32);
+  const da = is80 ? '-'.repeat(48) : '-'.repeat(32);
+  const dateStr = new Date(r.date||Date.now()).toLocaleDateString('tr-TR',{day:'2-digit',month:'2-digit',year:'numeric'});
+  const pad = (l,r,w2) => { const sp=w2-l.length-r.length; return l+' '.repeat(Math.max(1,sp))+r; };
+
+  let txt = '';
+  if(is80) {
+    txt += eq+'\n';
+    txt += '             EKOSA CEVRE COZUMLERI\n';
+    txt += '            Gida Hay.San.Tic.Ltd.Sti\n';
+    txt += '             Dinar / Afyonkarahisar\n';
+    txt += '                VKN: 3292317330\n';
+    txt += '                Lisans: 1244234\n';
+    txt += eq+'\n';
+    txt += '               BITKISEL ATIK YAG\n';
+    txt += '                  TESLIM FISI\n';
+    txt += eq+'\n';
+    txt += ' Tarih : '+dateStr+'\n';
+    txt += da+'\n';
+    txt += ' '+r.customerName+'\n';
+    txt += ' '+(r.city||'').toUpperCase()+'\n';
+    txt += da+'\n';
+    if(showPrice) {
+      txt += da+'\n';
+      txt += pad(' Aciklama','Miktar     Fiyat',w)+'\n';
+      txt += da+'\n';
+      txt += pad(' Atik Yag',r.quantity+' kg      '+(r.unitPrice||0).toFixed(2),w)+'\n';
+      txt += da+'\n';
+      txt += pad(' Net Tutar',(r.total||0).toFixed(2)+' TL',w)+'\n';
+      txt += pad(' KDV (%0)','0.00 TL',w)+'\n';
+      txt += da+'\n';
+      txt += pad(' TOPLAM',(r.total||0).toFixed(2)+' TL',w)+'\n';
+    } else {
+      txt += da+'\n';
+      txt += pad(' Aciklama','Miktar',w)+'\n';
+      txt += da+'\n';
+      txt += pad(' Bitkisel Atik Yag',r.quantity+' kg',w)+'\n';
+      txt += da+'\n';
+    }
+    txt += eq+'\n\n';
+    txt += ' Teslim Eden              Teslim Alan\n\n\n\n';
+    txt += ' _____________________   _____________________\n';
+    txt += ' '+(r.personnelName||'')+'\n\n';
+    txt += da+'\n';
+    txt += ' Isbu fis ile tarafiniza; 06/06/2015 tarihli\n';
+    txt += ' Bitkisel Atik Yaglarin Kontrolu Yonetmeligi\n';
+    txt += ' kapsaminda bitkisel atik yaglariniz icin MoTAT\n';
+    txt += ' (Mobil Atik Takip Sistemi) uzerinden atik\n';
+    txt += ' gonderim kaydi acmanizin zorunlu oldugu\n';
+    txt += ' bildirilmistir. Bu yukumlulugun yerine\n';
+    txt += ' getirilmemesinden dogacak her turlu idari ve\n';
+    txt += ' hukuki sorumluluk isletmenize aittir.\n';
+    txt += eq+'\n';
+  } else {
+    txt += eq+'\n';
+    txt += '     EKOSA CEVRE COZUMLERI\n';
+    txt += '    Gida Hay.San.Tic.Ltd.Sti\n';
+    txt += '     Dinar / Afyonkarahisar\n';
+    txt += '        VKN: 3292317330\n';
+    txt += '        Lisans: 1244234\n';
+    txt += eq+'\n';
+    txt += '       BITKISEL ATIK YAG\n';
+    txt += '          TESLIM FISI\n';
+    txt += eq+'\n';
+    txt += ' Tarih : '+dateStr+'\n';
+    txt += da+'\n';
+    txt += ' '+r.customerName+'\n';
+    txt += ' '+(r.city||'').toUpperCase()+'\n';
+    txt += da+'\n';
+    if(showPrice) {
+      txt += da+'\n';
+      txt += ' Aciklama       Miktar     Fiyat\n';
+      txt += da+'\n';
+      txt += pad(' Atik Yag       '+r.quantity+' kg',(r.unitPrice||0).toFixed(2),w)+'\n';
+      txt += da+'\n';
+      txt += pad(' Net Tutar',(r.total||0).toFixed(2)+' TL',w)+'\n';
+      txt += pad(' KDV (%0)','0.00 TL',w)+'\n';
+      txt += da+'\n';
+      txt += pad(' TOPLAM',(r.total||0).toFixed(2)+' TL',w)+'\n';
+    } else {
+      txt += da+'\n';
+      txt += ' Aciklama                Miktar\n';
+      txt += da+'\n';
+      txt += pad(' Atik Yag',r.quantity+' kg',w)+'\n';
+      txt += da+'\n';
+    }
+    txt += eq+'\n\n';
+    txt += ' Teslim Eden      Teslim Alan\n\n\n\n';
+    txt += ' _____________   _____________\n';
+    txt += ' '+(r.personnelName||'')+'\n\n';
+    txt += da+'\n';
+    txt += ' Isbu fis ile tarafiniza;\n';
+    txt += ' 06/06/2015 tarihli Bitkisel\n';
+    txt += ' Atik Yaglarin Kontrolu\n';
+    txt += ' Yonetmeligi kapsaminda bitkisel\n';
+    txt += ' atik yaglariniz icin MoTAT\n';
+    txt += ' (Mobil Atik Takip Sistemi)\n';
+    txt += ' uzerinden atik gonderim kaydi\n';
+    txt += ' acmanizin zorunlu oldugu\n';
+    txt += ' bildirilmistir. Bu yukumlulugun\n';
+    txt += ' yerine getirilmemesinden\n';
+    txt += ' dogacak her turlu idari ve\n';
+    txt += ' hukuki sorumluluk isletmenize\n';
+    txt += ' aittir.\n';
+    txt += eq+'\n';
+  }
+  const width = is80 ? '72mm' : '48mm';
+  const fs = is80 ? '11px' : '9px';
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>@page{margin:0;size:${width} auto}*{margin:0;padding:0}body{width:${width};padding:1mm}pre{font-family:'Courier New',monospace;font-size:${fs};white-space:pre;line-height:1.3;color:#000}</style></head><body><pre>${txt}</pre></body></html>`;
+}
+
+function generateTediyeHTML(id, size) {
+  const t = APP.data.tediye.find(x=>x.id===id);
+  if(!t) return '';
+  const is80 = size === '80';
+  const eq = is80 ? '='.repeat(48) : '='.repeat(32);
+  const da = is80 ? '-'.repeat(48) : '-'.repeat(32);
+  const dateStr = formatDate(t.date);
+  const amtNum = Math.floor(t.amount||0);
+  const amtWords = '('+tutarYaziyaCevir(amtNum)+' Turk Lirasi)';
+
+  let txt = '';
+  if(is80) {
+    txt += '             EKOSA CEVRE COZUMLERI\n';
+    txt += '            Gida Hay.San.Tic.Ltd.Sti\n';
+    txt += '              Dinar/Afyonkarahisar\n';
+    txt += '          VKN: 3292317330 - Dinar V.D.\n';
+    txt += eq+'\n';
+    txt += '                 TEDIYE MAKBUZU\n';
+    txt += eq+'\n';
+    txt += 'Makbuz No : '+(t.tediyeNo||'')+'\n';
+    txt += 'Tarih     : '+dateStr+'\n';
+    txt += da+'\n';
+    txt += 'Odemeyi Alan Kisi:\n';
+    txt += 'Ad Soyad  : '+(t.personName||'')+'\n';
+    txt += 'T.C. No   : '+(t.personTC||'')+'\n';
+    txt += 'Adres     : '+(t.city||'')+'\n';
+    txt += da+'\n';
+    txt += 'Mal/Hizmet Cinsi:\n';
+    txt += '  BITKISEL ATIK YAG BEDELI\n';
+    txt += da+'\n';
+    txt += 'ODENEN TUTAR  : '+amtNum+' TL\n';
+    txt += amtWords+'\n';
+    txt += eq+'\n\n';
+    txt += 'Yukaridaki belirtilen mal/hizmet\n';
+    txt += 'bedelini eksiksiz aldim.\n\n';
+    txt += da+'\n';
+    txt += 'Teslim Eden      Teslim Alan\n\n\n\n';
+    txt += '_______________  _____________\n';
+    txt += eq+'\n';
+  } else {
+    txt += '     EKOSA CEVRE COZUMLERI\n';
+    txt += '    Gida Hay.San.Tic.Ltd.Sti\n';
+    txt += '      Dinar/Afyonkarahisar\n';
+    txt += '  VKN: 3292317330 - Dinar V.D.\n';
+    txt += eq+'\n';
+    txt += '         TEDIYE MAKBUZU\n';
+    txt += eq+'\n';
+    txt += 'Makbuz No : '+(t.tediyeNo||'')+'\n';
+    txt += 'Tarih     : '+dateStr+'\n';
+    txt += da+'\n';
+    txt += 'Odemeyi Alan Kisi:\n';
+    txt += 'Ad Soyad  : '+(t.personName||'')+'\n';
+    txt += 'T.C. No   : '+(t.personTC||'')+'\n';
+    txt += 'Adres     : '+(t.city||'')+'\n';
+    txt += da+'\n';
+    txt += 'Mal/Hizmet Cinsi:\n';
+    txt += '  BITKISEL ATIK YAG BEDELI\n';
+    txt += da+'\n';
+    txt += 'ODENEN TUTAR  : '+amtNum+' TL\n';
+    txt += amtWords+'\n';
+    txt += eq+'\n\n';
+    txt += 'Yukaridaki belirtilen mal/hizmet\n';
+    txt += 'bedelini eksiksiz aldim.\n\n';
+    txt += da+'\n';
+    txt += 'Teslim Eden      Teslim Alan\n\n\n\n';
+    txt += '_______________  _____________\n';
+    txt += eq+'\n';
+  }
+  const width = is80 ? '72mm' : '48mm';
+  const fs = is80 ? '11px' : '9px';
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>@page{margin:0;size:${width} auto}*{margin:0;padding:0}body{width:${width};padding:1mm}pre{font-family:'Courier New',monospace;font-size:${fs};white-space:pre;line-height:1.3;color:#000}</style></head><body><pre>${txt}</pre></body></html>`;
+}
+
+function openRawBTPrint(html) {
+  try {
+    const encoded = btoa(unescape(encodeURIComponent(html)));
+    window.location.href = 'rawbt:base64,' + encoded;
+    return;
+  } catch(e) { console.warn('RawBT error:', e); }
+  const w = window.open('','_blank','width=300,height=500');
+  if(w) { w.document.write(html); w.document.close(); setTimeout(()=>w.print(),300); }
+}
+
+function printReceiptRawBT(id) {
+  const r = APP.data.receipts.find(x=>x.id===id);
+  const ptype = r?.printType||'fiyatli';
+  const body = `
+    <div style="text-align:center;padding:10px 0;">
+      <p style="margin-bottom:8px;font-weight:600;">Teslim Fişi Yazdır</p>
+      <p style="margin-bottom:16px;color:var(--text-secondary);font-size:12px;">Basım: ${ptype==='fiyatli'?'Fiyatlı':'Fiyatsız'} — Boyut seçin:</p>
+      <div style="display:flex;gap:12px;justify-content:center;">
+        <button class="btn btn-primary" onclick="doReceiptPrint('${id}','56')" style="padding:16px 32px;font-size:16px;">📄 56mm</button>
+        <button class="btn btn-primary" onclick="doReceiptPrint('${id}','80')" style="padding:16px 32px;font-size:16px;">📄 80mm</button>
+      </div>
+    </div>`;
+  openModal('🖨️ Teslim Fişi', body, '<button class="btn btn-secondary" onclick="closeModal()">İptal</button>');
+}
+function doReceiptPrint(id, size) { closeModal(); const h=generateReceiptHTML(id,size); if(h) openRawBTPrint(h); }
+
+function printTediyeRawBT(id) {
+  const body = `
+    <div style="text-align:center;padding:10px 0;">
+      <p style="margin-bottom:8px;font-weight:600;">Tediye Makbuzu Yazdır</p>
+      <p style="margin-bottom:16px;color:var(--text-secondary);font-size:12px;">Boyut seçin:</p>
+      <div style="display:flex;gap:12px;justify-content:center;">
+        <button class="btn btn-primary" onclick="doTediyePrint('${id}','56')" style="padding:16px 32px;font-size:16px;">📄 56mm</button>
+        <button class="btn btn-primary" onclick="doTediyePrint('${id}','80')" style="padding:16px 32px;font-size:16px;">📄 80mm</button>
+      </div>
+    </div>`;
+  openModal('🖨️ Tediye Makbuzu', body, '<button class="btn btn-secondary" onclick="closeModal()">İptal</button>');
+}
+function doTediyePrint(id, size) { closeModal(); const h=generateTediyeHTML(id,size); if(h) openRawBTPrint(h); }
 
 function openReceiptModal() {
   const nextNo = 'EKS-' + String(APP.data.receiptCounter+1).padStart(4,'0');
@@ -3087,67 +3854,13 @@ function openTediyeFromReceipt(receipt, amount) {
 // PRINT FUNCTIONS
 // ============================================================
 function printReceipt(id, size) {
-  const r = APP.data.receipts.find(x=>x.id===id);
-  if(!r) return;
-  const width = size === '56' ? '48mm' : '72mm';
-  const showPrice = r.printType !== 'fiyatsiz';
-
-  const html = `
-    <div style="width:${width};font-family:monospace;font-size:${size==='56'?'10px':'12px'};padding:4px;">
-      <div style="text-align:center;font-weight:bold;margin-bottom:8px;">EKOSA ÇEVRE ÇÖZÜMLERİ</div>
-      <div style="text-align:center;margin-bottom:8px;">ALIM MAKBUZU</div>
-      <div style="border-top:1px dashed #000;margin:4px 0;"></div>
-      <div>No: ${r.receiptNo}</div>
-      <div>Tarih: ${formatDate(r.date)}</div>
-      <div>İşletme: ${r.customerName}</div>
-      <div style="border-top:1px dashed #000;margin:4px 0;"></div>
-      <div>Miktar: ${r.quantity} kg</div>
-      ${showPrice ? `
-        <div>Birim Fiyat: ${formatMoney(r.unitPrice)}/kg</div>
-        <div>Ara Toplam: ${formatMoney(r.total)}</div>
-        <div>KDV (%20): ${formatMoney(r.kdv)}</div>
-        <div style="font-weight:bold;">TOPLAM: ${formatMoney(r.grandTotal)}</div>
-      ` : '<div>Ürün: Atık Bitkisel Yağ</div>'}
-      <div style="border-top:1px dashed #000;margin:4px 0;"></div>
-      <div>Araç: ${r.vehiclePlate||'-'}</div>
-      <div>Personel: ${r.personnelName||'-'}</div>
-      <div style="text-align:center;margin-top:8px;font-size:9px;">Ekosa Çevre Çözümleri</div>
-    </div>
-  `;
-
-  const printWindow = window.open('', '_blank', 'width=300,height=400');
-  printWindow.document.write(html);
-  printWindow.document.close();
-  printWindow.print();
+  const html = generateReceiptHTML(id, size);
+  if(html) openRawBTPrint(html);
 }
 
 function printTediye(id, size) {
-  const t = APP.data.tediye.find(x=>x.id===id);
-  if(!t) return;
-  const width = size === '56' ? '48mm' : '72mm';
-
-  const html = `
-    <div style="width:${width};font-family:monospace;font-size:${size==='56'?'10px':'12px'};padding:4px;">
-      <div style="text-align:center;font-weight:bold;margin-bottom:8px;">EKOSA ÇEVRE ÇÖZÜMLERİ</div>
-      <div style="text-align:center;margin-bottom:8px;">TEDİYE MAKBUZU</div>
-      <div style="border-top:1px dashed #000;margin:4px 0;"></div>
-      <div>No: ${t.tediyeNo}</div>
-      <div>Tarih: ${formatDate(t.date)}</div>
-      <div style="border-top:1px dashed #000;margin:4px 0;"></div>
-      <div>Ad Soyad: ${t.personName}</div>
-      <div>TC: ${t.personTC}</div>
-      <div>İl/İlçe: ${t.city} / ${t.district}</div>
-      <div>Ürün: ${t.product}</div>
-      <div style="font-weight:bold;margin-top:4px;">TUTAR: ${formatMoney(t.amount)}</div>
-      <div style="border-top:1px dashed #000;margin:4px 0;"></div>
-      <div style="text-align:center;margin-top:8px;font-size:9px;">Ekosa Çevre Çözümleri</div>
-    </div>
-  `;
-
-  const printWindow = window.open('', '_blank', 'width=300,height=400');
-  printWindow.document.write(html);
-  printWindow.document.close();
-  printWindow.print();
+  const html = generateTediyeHTML(id, size);
+  if(html) openRawBTPrint(html);
 }
 
 // ============================================================
@@ -3203,6 +3916,7 @@ function saveVehicle(id) {
 function deleteVehicle(id) {
   if(!confirm('Bu aracı silmek istediğinize emin misiniz?')) return;
   APP.data.vehicles = APP.data.vehicles.filter(v=>v.id!==id);
+  deleteFromFirestore('vehicles', id);
   saveData(); closeModal(); renderVehicles();
   toast('Araç silindi');
 }
@@ -3242,7 +3956,21 @@ function emptyVehicle(id) {
 // DEPOT
 // ============================================================
 function renderDepot() {
+  // Recalculate depot stock from entries and exits
+  const totalEntries = APP.data.depotEntries.reduce((s,e) => s + (e.quantity||0), 0);
+  const totalExits = APP.data.depotExits.reduce((s,e) => s + (e.quantity||0), 0);
+  const totalEntryCost = APP.data.depotEntries.reduce((s,e) => s + (e.cost||0), 0);
+  const totalExitCost = APP.data.depotExits.reduce((s,e) => {
+    const avgCost = totalEntries > 0 ? totalEntryCost / totalEntries : 0;
+    return s + (e.quantity||0) * avgCost;
+  }, 0);
+
   const depot = APP.data.depots[0] || {stock:0, totalCost:0, name:'Merkez Depo'};
+  // Sync calculated stock
+  depot.stock = Math.max(0, totalEntries - totalExits);
+  depot.totalCost = Math.max(0, totalEntryCost - totalExitCost);
+  APP.data.depots[0] = depot;
+
   const avgCost = depot.stock > 0 ? depot.totalCost / depot.stock : 0;
 
   document.getElementById('depotSummary').innerHTML = `
@@ -3338,6 +4066,7 @@ function deleteDepotExit(id) {
   if(exit) {
     APP.data.depots[0].stock += exit.quantity;
     APP.data.depotExits = APP.data.depotExits.filter(e=>e.id!==id);
+    deleteFromFirestore('depotExits', id);
     saveData(); renderDepot();
     toast('Çıkış silindi');
   }
@@ -3444,40 +4173,135 @@ function loadFuelCard(cardNo) {
 // ============================================================
 // CARİ HESAP
 // ============================================================
+function cariLiveSearch() {
+  const search = (document.getElementById('cariSearchInput')?.value||'').toLowerCase().trim();
+  const resultsDiv = document.getElementById('cariSearchResults');
+  if(search.length < 1) {
+    resultsDiv.style.display = 'none';
+    return;
+  }
+  const matches = APP.data.customers.filter(c =>
+    c.name.toLowerCase().includes(search) ||
+    (c.contact||'').toLowerCase().includes(search) ||
+    (c.city||'').toLowerCase().includes(search)
+  ).slice(0, 8);
+
+  if(matches.length === 0) {
+    resultsDiv.innerHTML = '<div style="padding:12px 16px;color:var(--text-light);font-size:13px;">Sonuç bulunamadı</div>';
+  } else {
+    resultsDiv.innerHTML = matches.map(c => {
+      const txs = APP.data.cariTransactions.filter(t=>t.customerId===c.id);
+      let netDebt = 0;
+      txs.forEach(t => { netDebt += (t.borc||0) - (t.alacak||0); });
+      const balColor = netDebt > 0 ? 'var(--danger)' : netDebt < 0 ? 'var(--success)' : 'var(--text-secondary)';
+      const balText = netDebt > 0 ? 'Borcumuz: '+formatMoney(netDebt) : netDebt < 0 ? 'Alacağımız: '+formatMoney(Math.abs(netDebt)) : '₺0';
+      return `<div style="padding:10px 16px;cursor:pointer;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;" 
+        onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background=''" 
+        onclick="cariSelectCustomer('${c.id}')">
+        <div><div style="font-weight:600;font-size:13px;">${c.name}</div>
+        <div style="font-size:11px;color:var(--text-secondary);">${c.city||''} ${c.district?'/ '+c.district:''}</div></div>
+        <div style="font-size:12px;font-weight:600;color:${balColor};">${txs.length>0?balText:'-'}</div>
+      </div>`;
+    }).join('');
+  }
+  resultsDiv.style.display = 'block';
+}
+
+function cariSelectCustomer(id) {
+  document.getElementById('cariSelectedCustomerId').value = id;
+  const c = APP.data.customers.find(x=>x.id===id);
+  document.getElementById('cariSearchInput').value = c?.name || '';
+  document.getElementById('cariSearchResults').style.display = 'none';
+  document.getElementById('cariSelectedBanner').style.display = 'flex';
+  document.getElementById('cariSelectedName').textContent = (c?.name||'') + ' — ' + (c?.city||'');
+  renderCariHesap();
+}
+
+function cariClearSelection() {
+  document.getElementById('cariSelectedCustomerId').value = '';
+  document.getElementById('cariSearchInput').value = '';
+  document.getElementById('cariSelectedBanner').style.display = 'none';
+  renderCariHesap();
+}
+
+document.addEventListener('click', function(e) {
+  const si = document.getElementById('cariSearchInput');
+  const sr = document.getElementById('cariSearchResults');
+  if(si && sr && !si.contains(e.target) && !sr.contains(e.target)) {
+    sr.style.display = 'none';
+  }
+});
+
 function renderCariHesap() {
-  const customerId = document.getElementById('cariCustomerFilter')?.value;
+  const customerId = document.getElementById('cariSelectedCustomerId')?.value;
   if(!customerId) {
-    document.getElementById('cariSummary').innerHTML = '<div class="widget-empty">Müşteri seçin</div>';
+    // Show all customers with balances
+    const allBalances = [];
+    APP.data.customers.forEach(c => {
+      const txs = APP.data.cariTransactions.filter(t=>t.customerId===c.id);
+      if(txs.length === 0) return;
+      let netDebt = 0;
+      txs.forEach(t => { netDebt += (t.borc||0) - (t.alacak||0); });
+      allBalances.push({name:c.name, city:c.city, id:c.id, netDebt, txCount:txs.length});
+    });
+    allBalances.sort((a,b) => b.netDebt - a.netDebt);
+
+    document.getElementById('cariSummary').innerHTML = allBalances.length ? `
+      <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Yukarıdaki arama kutusundan işletme arayın veya aşağıdan seçin:</div>
+      ${allBalances.map(b => `
+        <div class="wlist-item" style="cursor:pointer;" onclick="cariSelectCustomer('${b.id}')">
+          <div class="wlist-left">
+            <div class="wlist-name">${b.name}</div>
+            <div class="wlist-sub">${b.city||''} — ${b.txCount} işlem</div>
+          </div>
+          <div class="wlist-right"><span class="wlist-tag ${b.netDebt>0?'tag-red':b.netDebt<0?'tag-green':'tag-blue'}">${b.netDebt>0?'Borcumuz: '+formatMoney(b.netDebt):b.netDebt<0?'Alacağımız: '+formatMoney(Math.abs(b.netDebt)):formatMoney(0)}</span></div>
+        </div>
+      `).join('')}
+    ` : '<div class="widget-empty">Henüz cari işlem yok. Arama kutusundan işletme arayın.</div>';
     document.getElementById('cariBody').innerHTML = '';
     return;
   }
 
+  // Show selected customer's transactions
   const txs = APP.data.cariTransactions.filter(t=>t.customerId===customerId).sort((a,b)=>a.date.localeCompare(b.date));
-  let balance = 0;
+  let runningDebt = 0; // positive = we owe them, negative = they owe us
   const rows = txs.map(t => {
-    balance += (t.alacak||0) - (t.borc||0);
+    runningDebt += (t.borc||0) - (t.alacak||0);
     return `<tr>
       <td>${formatDate(t.date)}</td>
-      <td>${t.type==='alim'?'Alım':t.type==='odeme'?'Ödeme':'Düzeltme'}</td>
+      <td>${t.type==='alim'?'📦 Alım':t.type==='odeme'?'💰 Ödeme':'🔧 Düzeltme'}</td>
       <td>${t.description||'-'}</td>
-      <td style="color:var(--danger);">${t.borc?formatMoney(t.borc):'-'}</td>
-      <td style="color:var(--success);">${t.alacak?formatMoney(t.alacak):'-'}</td>
-      <td style="font-weight:600;color:${balance>=0?'var(--success)':'var(--danger)'};">${formatMoney(balance)}</td>
+      <td style="color:var(--danger);font-weight:${t.borc?'600':'400'};">${t.borc?formatMoney(t.borc):'-'}</td>
+      <td style="color:var(--success);font-weight:${t.alacak?'600':'400'};">${t.alacak?formatMoney(t.alacak):'-'}</td>
+      <td style="font-weight:600;color:${runningDebt>0?'var(--danger)':runningDebt<0?'var(--success)':'var(--text)'};">${formatMoney(Math.abs(runningDebt))} ${runningDebt>0?'(B)':runningDebt<0?'(A)':''}</td>
     </tr>`;
   });
 
+  const totalBorc = txs.reduce((s,t) => s+(t.borc||0), 0);
+  const totalAlacak = txs.reduce((s,t) => s+(t.alacak||0), 0);
+
   document.getElementById('cariSummary').innerHTML = `
-    <div style="text-align:center;">
-      <div style="font-size:12px;color:var(--text-secondary);">Güncel Bakiye</div>
-      <div style="font-size:28px;font-weight:700;color:${balance>=0?'var(--success)':'var(--danger)'};">${formatMoney(balance)}</div>
-      <div style="font-size:12px;color:var(--text-secondary);">${balance>=0?'İşletme bize borçlu':'Biz işletmeye borçluyuz'}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center;">
+      <div>
+        <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;">Toplam Borç</div>
+        <div style="font-size:20px;font-weight:700;color:var(--danger);">${formatMoney(totalBorc)}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;">Toplam Ödeme</div>
+        <div style="font-size:20px;font-weight:700;color:var(--success);">${formatMoney(totalAlacak)}</div>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;">Net Bakiye</div>
+        <div style="font-size:24px;font-weight:700;color:${runningDebt>0?'var(--danger)':runningDebt<0?'var(--success)':'var(--text)'};">${formatMoney(Math.abs(runningDebt))}</div>
+        <div style="font-size:11px;color:var(--text-secondary);">${runningDebt>0?'İşletmeye borcumuz var':runningDebt<0?'Fazla ödeme yapılmış':'Hesap dengede'}</div>
+      </div>
     </div>
   `;
   document.getElementById('cariBody').innerHTML = rows.join('');
 }
 
 function openCariManualModal() {
-  const customerId = document.getElementById('cariCustomerFilter')?.value;
+  const customerId = document.getElementById('cariSelectedCustomerId')?.value;
   if(!customerId) { toast('Önce müşteri seçin','error'); return; }
   const body = `
     <div class="form-row">
@@ -3496,7 +4320,7 @@ function openCariManualModal() {
 }
 
 function saveCariManual() {
-  const customerId = document.getElementById('cariCustomerFilter').value;
+  const customerId = document.getElementById('cariSelectedCustomerId').value;
   const type = document.getElementById('mCariType').value;
   const amount = parseFloat(document.getElementById('mCariAmount').value)||0;
   if(amount<=0) { toast('Tutar girin','error'); return; }
@@ -3575,6 +4399,7 @@ function saveNote() {
 function deleteNote(id) {
   if(!confirm('Bu notu silmek istediğinize emin misiniz?')) return;
   APP.data.notes = APP.data.notes.filter(n=>n.id!==id);
+  deleteFromFirestore('notes', id);
   saveData(); renderNotes();
   toast('Not silindi');
 }
@@ -3643,6 +4468,7 @@ function saveLicense() {
 function deleteLicense(id) {
   if(!confirm('Bu belgeyi silmek istediğinize emin misiniz?')) return;
   APP.data.licenses = APP.data.licenses.filter(l=>l.id!==id);
+  deleteFromFirestore('licenses', id);
   saveData(); renderLicenses();
   toast('Belge silindi');
 }
@@ -3650,6 +4476,62 @@ function deleteLicense(id) {
 function shareLicenseWhatsApp(id) {
   const l = APP.data.licenses.find(x=>x.id===id);
   if(!l) return;
+  
+  // If file data exists, try Web Share API with file
+  if(l.fileData && navigator.share && navigator.canShare) {
+    // Convert base64 data URL to File
+    try {
+      const arr = l.fileData.split(',');
+      const mime = arr[0].match(/:(.*?);/)?.[1] || 'application/pdf';
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while(n--) u8arr[n] = bstr.charCodeAt(n);
+      const file = new File([u8arr], (l.fileName || l.name + '.pdf'), {type: mime});
+      
+      const shareData = {
+        title: 'Ekosa - ' + l.name,
+        text: 'Ekosa Çevre Çözümleri - ' + l.name,
+        files: [file]
+      };
+      
+      if(navigator.canShare(shareData)) {
+        navigator.share(shareData).catch(err => {
+          console.warn('Share failed, falling back:', err);
+          fallbackWhatsAppShare(l);
+        });
+        return;
+      }
+    } catch(e) {
+      console.warn('File share error:', e);
+    }
+  }
+  
+  fallbackWhatsAppShare(l);
+}
+
+function fallbackWhatsAppShare(l) {
+  // If we have a file, create a downloadable blob URL and share the link
+  if(l.fileData) {
+    try {
+      const arr = l.fileData.split(',');
+      const mime = arr[0].match(/:(.*?);/)?.[1] || 'application/pdf';
+      const bstr = atob(arr[1]);
+      let n = bstr.length;
+      const u8arr = new Uint8Array(n);
+      while(n--) u8arr[n] = bstr.charCodeAt(n);
+      const blob = new Blob([u8arr], {type: mime});
+      const url = URL.createObjectURL(blob);
+      
+      // Open file in new tab so user can share manually
+      const win = window.open(url, '_blank');
+      toast('Belge yeni sekmede açıldı. WhatsApp\'tan paylaşmak için indirip gönderin.', 'info');
+      return;
+    } catch(e) {
+      console.warn('Blob create error:', e);
+    }
+  }
+  
   const text = `Ekosa Çevre Çözümleri - ${l.name}`;
   window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
 }
@@ -3865,13 +4747,24 @@ function switchAdminTab(tab) {
   const content = document.getElementById('adminTabContent');
 
   if(tab==='users') {
+    // Load saved user list from localStorage/Firestore
+    const users = getAdminUsers();
     content.innerHTML = `
       <div style="margin:20px 0;">
-        <button class="btn btn-primary" onclick="openAdminUserModal()">Yeni Kullanıcı</button>
+        <button class="btn btn-primary" onclick="openAdminUserModal()">+ Yeni Personel</button>
       </div>
       <div class="widget">
-        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Kullanıcı</th><th>Ad</th><th>Rol</th><th>İşlem</th></tr></thead>
-        <tbody>${Object.entries(USER_MAP).map(([email,u])=>`<tr><td>${email}</td><td>${u.name}</td><td>${u.role==='admin'?'Yönetici':u.role==='ofis'?'Ofis':'Saha'}</td><td>-</td></tr>`).join('')}</tbody></table></div>
+        <div class="data-table-wrap"><table class="data-table"><thead><tr><th>Email</th><th>Ad Soyad</th><th>Rol</th><th>İşlem</th></tr></thead>
+        <tbody>${users.map(u=>`<tr>
+          <td>${u.email}</td>
+          <td><strong>${u.name}</strong></td>
+          <td><span class="status ${u.role==='admin'?'status-done':u.role==='ofis'?'status-pending':'status-waiting'}">${u.role==='admin'?'Yönetici':u.role==='ofis'?'Ofis':'Saha'}</span></td>
+          <td style="white-space:nowrap;">
+            <button class="btn btn-sm btn-secondary" onclick="openAdminUserModal('${u.email}')">✏️ Düzenle</button>
+            <button class="btn btn-sm btn-secondary" onclick="resetUserPassword('${u.email}')">🔑 Şifre</button>
+            ${u.role!=='admin'?`<button class="btn btn-sm btn-danger" onclick="deleteAdminUser('${u.email}')">🗑️</button>`:''}
+          </td>
+        </tr>`).join('')}</tbody></table></div>
       </div>
     `;
   }
@@ -3900,9 +4793,21 @@ function switchAdminTab(tab) {
   }
   else if(tab==='depotsAdmin') {
     content.innerHTML = `
+      <div style="margin:20px 0;">
+        <button class="btn btn-primary" onclick="openDepotAdminModal()">+ Yeni Depo</button>
+      </div>
       <div class="widget"><div class="widget-body">${APP.data.depots.map(d=>`
-        <div class="wlist-item"><div class="wlist-name">${d.name} (${d.city||''})</div><span class="wlist-tag tag-blue">${formatKg(d.stock)}</span></div>
-      `).join('')}</div></div>
+        <div class="wlist-item">
+          <div class="wlist-left">
+            <div class="wlist-name">${d.name}</div>
+            <div class="wlist-sub">${d.city||'Şehir belirtilmemiş'} — Stok: ${formatKg(d.stock||0)}</div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-sm btn-secondary" onclick="openDepotAdminModal('${d.id}')">✏️ Düzenle</button>
+            ${APP.data.depots.length>1?`<button class="btn btn-sm btn-danger" onclick="deleteDepotAdmin('${d.id}')">🗑️</button>`:''}
+          </div>
+        </div>
+      `).join('')||'<div class="widget-empty">Depo yok</div>'}</div></div>
     `;
   }
   else if(tab==='facilitiesAdmin') {
@@ -3924,6 +4829,245 @@ function switchAdminTab(tab) {
       `).join('')}</div></div>
     `;
   }
+}
+
+// ===== ADMIN USER MANAGEMENT =====
+function getAdminUsers() {
+  // Merge USER_MAP with any saved custom users
+  const saved = JSON.parse(localStorage.getItem('ekosa_users_ext')||'{}');
+  const merged = {...USER_MAP, ...saved};
+  return Object.entries(merged).map(([email, u])=>({email, name:u.name, role:u.role}));
+}
+
+function saveAdminUsers(email, data) {
+  const saved = JSON.parse(localStorage.getItem('ekosa_users_ext')||'{}');
+  saved[email] = data;
+  localStorage.setItem('ekosa_users_ext', JSON.stringify(saved));
+  // Also update USER_MAP in memory
+  USER_MAP[email] = data;
+  // Sync to Firestore
+  if(isFirebaseReady) {
+    db.collection('settings').doc('users').set(saved, {merge:true}).catch(e=>console.warn('User sync error:',e));
+  }
+}
+
+function openAdminUserModal(email) {
+  const users = getAdminUsers();
+  const u = email ? users.find(x=>x.email===email) : null;
+  const isNew = !u;
+
+  const body = `
+    <div class="form-group">
+      <label class="form-label">Email *</label>
+      <input class="form-input" id="mAdmUserEmail" value="${u?.email||''}" placeholder="kullanici@ekosa.com" ${!isNew?'readonly style="background:var(--bg);"':''}>
+      ${isNew?'<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">@ekosa.com olmadan yazarsanız otomatik eklenir</div>':''}
+    </div>
+    <div class="form-group">
+      <label class="form-label">Ad Soyad *</label>
+      <input class="form-input" id="mAdmUserName" value="${u?.name||''}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Rol *</label>
+      <select class="form-select" id="mAdmUserRole">
+        <option value="saha" ${u?.role==='saha'||!u?'selected':''}>Saha Personeli</option>
+        <option value="ofis" ${u?.role==='ofis'?'selected':''}>Ofis</option>
+        <option value="admin" ${u?.role==='admin'?'selected':''}>Yönetici (Admin)</option>
+      </select>
+    </div>
+    ${isNew?`
+    <hr style="margin:16px 0;border-color:var(--border);">
+    <div class="form-group">
+      <label class="form-label">Şifre *</label>
+      <input class="form-input" type="password" id="mAdmUserPass" placeholder="En az 6 karakter">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Şifre Tekrar *</label>
+      <input class="form-input" type="password" id="mAdmUserPass2" placeholder="Şifreyi tekrar girin">
+    </div>
+    `:''}
+  `;
+  openModal(isNew?'Yeni Personel Ekle':'Personel Düzenle', body, `
+    <button class="btn btn-secondary" onclick="closeModal()">İptal</button>
+    <button class="btn btn-primary" onclick="saveAdminUser('${email||''}')">${isNew?'Oluştur':'Kaydet'}</button>
+  `);
+}
+
+async function saveAdminUser(existingEmail) {
+  let email = document.getElementById('mAdmUserEmail').value.trim();
+  const name = document.getElementById('mAdmUserName').value.trim();
+  const role = document.getElementById('mAdmUserRole').value;
+
+  if(!email || !name) { toast('Email ve ad soyad gerekli','error'); return; }
+  if(!email.includes('@')) email += '@ekosa.com';
+
+  const isNew = !existingEmail;
+
+  if(isNew) {
+    const pass = document.getElementById('mAdmUserPass')?.value||'';
+    const pass2 = document.getElementById('mAdmUserPass2')?.value||'';
+    if(pass.length < 6) { toast('Şifre en az 6 karakter olmalı','error'); return; }
+    if(pass !== pass2) { toast('Şifreler eşleşmiyor','error'); return; }
+
+    // Create user in Firebase Auth
+    if(isFirebaseReady) {
+      try {
+        // Use secondary auth to create user without logging out current admin
+        const tempApp = firebase.initializeApp(firebase.app().options, 'tempAuth'+Date.now());
+        const tempAuth = tempApp.auth();
+        await tempAuth.createUserWithEmailAndPassword(email, pass);
+        await tempAuth.signOut();
+        tempApp.delete();
+        toast('✅ Firebase hesabı oluşturuldu: ' + email);
+      } catch(e) {
+        if(e.code === 'auth/email-already-in-use') {
+          toast('Bu email zaten kayıtlı, bilgiler güncellenecek','info');
+        } else {
+          toast('Firebase hesap hatası: '+e.message,'error');
+          console.warn('Create user error:', e);
+        }
+      }
+    }
+  }
+
+  // Save to local user map
+  saveAdminUsers(email, {name, role});
+  closeModal();
+  switchAdminTab('users');
+  toast(isNew ? name+' eklendi' : name+' güncellendi');
+}
+
+async function resetUserPassword(email) {
+  if(!confirm(email+' adresine şifre sıfırlama e-postası gönderilsin mi?')) return;
+  if(isFirebaseReady) {
+    try {
+      await auth.sendPasswordResetEmail(email);
+      toast('✅ Şifre sıfırlama e-postası gönderildi: '+email);
+    } catch(e) {
+      // Fallback: show manual password change
+      openManualPasswordModal(email);
+    }
+  } else {
+    openManualPasswordModal(email);
+  }
+}
+
+function openManualPasswordModal(email) {
+  const body = `
+    <p style="color:var(--text-secondary);font-size:13px;margin-bottom:16px;">${email} için yeni şifre belirleyin:</p>
+    <div class="form-group"><label class="form-label">Yeni Şifre</label><input class="form-input" type="password" id="mNewPassInput" placeholder="En az 6 karakter"></div>
+    <div class="form-group"><label class="form-label">Şifre Tekrar</label><input class="form-input" type="password" id="mNewPassInput2"></div>
+  `;
+  openModal('Şifre Değiştir — '+email, body, `
+    <button class="btn btn-secondary" onclick="closeModal()">İptal</button>
+    <button class="btn btn-primary" onclick="doManualPasswordChange('${email}')">Değiştir</button>
+  `);
+}
+
+async function doManualPasswordChange(email) {
+  const pass = document.getElementById('mNewPassInput').value;
+  const pass2 = document.getElementById('mNewPassInput2').value;
+  if(pass.length < 6) { toast('Şifre en az 6 karakter','error'); return; }
+  if(pass !== pass2) { toast('Şifreler eşleşmiyor','error'); return; }
+
+  // If the current user is the one changing their own password
+  if(auth.currentUser && auth.currentUser.email === email) {
+    try {
+      await auth.currentUser.updatePassword(pass);
+      toast('✅ Şifreniz değiştirildi');
+      closeModal();
+      return;
+    } catch(e) {
+      toast('Hata: '+e.message,'error');
+      return;
+    }
+  }
+
+  // For other users, try re-auth method
+  if(isFirebaseReady) {
+    try {
+      const tempApp = firebase.initializeApp(firebase.app().options, 'tempPwd'+Date.now());
+      const tempAuth = tempApp.auth();
+      // We need the old password to sign in - can't change without it
+      toast('Diğer kullanıcıların şifresini değiştirmek için şifre sıfırlama e-postası gönderin','info');
+      tempApp.delete();
+      closeModal();
+      resetUserPassword(email);
+    } catch(e) {
+      toast('Şifre değiştirme hatası: '+e.message,'error');
+    }
+  } else {
+    toast('Firebase bağlantısı yok, şifre değiştirilemedi','error');
+    closeModal();
+  }
+}
+
+function deleteAdminUser(email) {
+  const users = getAdminUsers();
+  const u = users.find(x=>x.email===email);
+  if(!u) return;
+  if(u.role === 'admin') { toast('Admin kullanıcı silinemez','error'); return; }
+  if(!confirm(u.name+' ('+email+') kullanıcısını silmek istediğinize emin misiniz?\n\nNot: Firebase hesabı silinmez, sadece CRM erişimi kaldırılır.')) return;
+
+  // Remove from saved users
+  const saved = JSON.parse(localStorage.getItem('ekosa_users_ext')||'{}');
+  delete saved[email];
+  delete USER_MAP[email];
+  localStorage.setItem('ekosa_users_ext', JSON.stringify(saved));
+
+  switchAdminTab('users');
+  toast(u.name+' silindi');
+}
+
+// ===== ADMIN DEPOT MANAGEMENT =====
+function openDepotAdminModal(id) {
+  const d = id ? APP.data.depots.find(x=>x.id===id) : null;
+  const body = `
+    <div class="form-group"><label class="form-label">Depo Adı *</label><input class="form-input" id="mDepName" value="${d?.name||''}" placeholder="Merkez Depo"></div>
+    <div class="form-group"><label class="form-label">Şehir</label>
+      <select class="form-select" id="mDepCity">
+        <option value="">Seçin</option>
+        ${APP.data.cities.map(c=>`<option ${d?.city===c?'selected':''}>${c}</option>`).join('')}
+      </select>
+    </div>
+    ${d?`<div class="form-group"><label class="form-label">Mevcut Stok (kg)</label><input class="form-input" type="number" id="mDepStock" value="${d.stock||0}" min="0"></div>`:''}
+  `;
+  openModal(d?'Depo Düzenle':'Yeni Depo Ekle', body, `
+    <button class="btn btn-secondary" onclick="closeModal()">İptal</button>
+    <button class="btn btn-primary" onclick="saveDepotAdmin('${id||''}')">${d?'Kaydet':'Ekle'}</button>
+  `);
+}
+
+function saveDepotAdmin(id) {
+  const name = document.getElementById('mDepName').value.trim();
+  if(!name) { toast('Depo adı gerekli','error'); return; }
+  const city = document.getElementById('mDepCity').value;
+
+  if(id) {
+    const idx = APP.data.depots.findIndex(d=>d.id===id);
+    if(idx>=0) {
+      APP.data.depots[idx].name = name;
+      APP.data.depots[idx].city = city;
+      const stockInput = document.getElementById('mDepStock');
+      if(stockInput) APP.data.depots[idx].stock = parseFloat(stockInput.value)||0;
+    }
+  } else {
+    APP.data.depots.push({id:uid(), name, city, stock:0, totalCost:0});
+  }
+  saveData(); closeModal();
+  switchAdminTab('depotsAdmin');
+  toast(id?'Depo güncellendi':'Depo eklendi');
+}
+
+function deleteDepotAdmin(id) {
+  const d = APP.data.depots.find(x=>x.id===id);
+  if(!d) return;
+  if(APP.data.depots.length <= 1) { toast('En az 1 depo olmalı','error'); return; }
+  if(d.stock > 0) { toast('Stoklu depo silinemez. Önce stoğu boşaltın.','error'); return; }
+  if(!confirm(d.name+' deposunu silmek istediğinize emin misiniz?')) return;
+  APP.data.depots = APP.data.depots.filter(x=>x.id!==id);
+  saveData();
+  switchAdminTab('depotsAdmin');
+  toast('Depo silindi');
 }
 
 function addCity() {
@@ -3960,6 +5104,254 @@ function removeFacility(id) {
   switchAdminTab('facilitiesAdmin');
   toast('Tesis silindi');
 }
+
+// ============================================================
+// AI ASSISTANT (Free - Local Knowledge + CRM Data Analysis)
+// ============================================================
+const SEKTOR_BILGI = {
+  motat: `MoTAT (Mobil Atık Takip Sistemi): Çevre, Şehircilik ve İklim Değişikliği Bakanlığı'nın atık taşıma süreçlerini takip etmek için geliştirdiği mobil uygulamadır. Atık üreticileri ve toplayıcıları MoTAT üzerinden atık gönderim kaydı açmak zorundadır. Kayıt açılmadan atık taşıması yapılamaz. Her taşıma için gönderim formu oluşturulur. Uygulama GPS ile araç takibi yapar. Cezalar: MoTAT kaydı açmadan taşıma yapılması durumunda işletmeye idari para cezası uygulanır.`,
+  ucbs: `UÇBS (Ulusal Çevre Bilgi Sistemi): Bakanlığın tüm çevresel verileri topladığı merkezi bilgi sistemidir. Atık beyannameleri, çevre izinleri, lisanslar bu sistem üzerinden yönetilir. Yıllık atık beyannameleri UÇBS üzerinden verilir. Beyan süresi genellikle Mart ayı sonuna kadardır.`,
+  yonetmelik: `Bitkisel Atık Yağların Kontrolü Yönetmeliği (06/06/2015 R.G. 29378): Bitkisel atık yağların üretiminden bertarafına kadar tüm süreçleri düzenler. Atık yağ üreticileri (restoranlar, oteller, yemekhaneler vb.) atık yağlarını lisanslı toplama firmalarına vermek zorundadır. Kanalizasyona, toprağa veya çöpe atılması yasaktır. Toplama firmaları Bakanlıktan lisans almak zorundadır. Toplanan yağlar geri kazanım tesislerine (biyodizel üretimi vb.) teslim edilir. Taşıma TS 13012 standardına uygun araçlarla yapılmalıdır.`,
+  lisans: `Toplama-Ayırma Lisansı: Çevre ve Şehircilik Bakanlığı tarafından verilir. 3 yıl geçerlidir, süre dolmadan yenilenmelidir. Lisans şartları: Uygun depolama alanı, taşıma araçları, teknik personel, mali yeterlilik. Ara depolama tesisi: Toplanan yağların geçici depolandığı, Bakanlık onaylı tesis.`,
+  tasima: `Atık Taşıma: TS 13012 standardına uygun araçlarla yapılmalıdır. Araçlarda sarı tepe lambası (çakar) bulunmalıdır (Karayolları Trafik Yönetmeliği). Araç uygunluk belgesi TSE'den alınır. TMGD (Tehlikeli Madde Güvenlik Danışmanı) bulundurma zorunluluğu taşıma hacmine göre belirlenir. ADR (Tehlikeli Malların Karayoluyla Uluslararası Taşınması) mevzuatına uyulmalıdır.`,
+  cezalar: `Çevre Kanunu Cezaları: Atık yağını lisanssız kişilere verme: İdari para cezası. MoTAT kaydı açmadan taşıma: İdari para cezası. Lisanssız toplama faaliyeti: Ağır idari para cezası + faaliyetin durdurulması. Çevreyi kirletme (kanalizasyona atma vb.): 2872 sayılı Çevre Kanunu md.20 uyarınca ceza. Beyanname vermeme: İdari para cezası.`,
+  biyodizel: `Geri Kazanım: Toplanan bitkisel atık yağlar geri kazanım tesislerinde biyodizel, sabun, hayvan yemi katkısı gibi ürünlere dönüştürülür. Geri kazanım tesisleri de Bakanlık lisanslıdır. Toplama firması yağı sadece lisanslı geri kazanım tesisine verebilir.`
+};
+
+function toggleAIPanel() {
+  document.getElementById('aiPanel').classList.toggle('show');
+}
+function showAIButton() {
+  document.getElementById('aiFab').style.display = 'flex';
+}
+function clearAIChat() {
+  document.getElementById('aiMessages').innerHTML = '<div class="ai-msg ai-msg-ai">Sohbet temizlendi. Size nasıl yardımcı olabilirim?</div>';
+}
+function openAISettings() {
+  openModal('AI Hakkında', `
+    <div style="text-align:center;padding:20px;">
+      <div style="font-size:40px;margin-bottom:12px;">🤖</div>
+      <h3>Ekosa AI Asistan</h3>
+      <p style="color:var(--text-secondary);margin:12px 0;">Ücretsiz, internet gerektirmez. CRM verilerinize ve sektör mevzuatına dayalı cevaplar verir.</p>
+      <div style="text-align:left;font-size:12px;color:var(--text-secondary);margin-top:16px;">
+        <p><strong>Sorulabilecek konular:</strong></p>
+        <p>📊 CRM verileri (satışlar, müşteriler, stok)</p>
+        <p>📋 MoTAT, UÇBS sistemleri</p>
+        <p>⚖️ Bitkisel atık yağ yönetmeliği</p>
+        <p>🚛 Taşıma, lisans, TSE belgeleri</p>
+        <p>💰 Cari bakiyeler, borç/alacak</p>
+        <p>⚠️ Cezalar ve yaptırımlar</p>
+      </div>
+    </div>
+  `, '<button class="btn btn-secondary" onclick="closeModal()">Kapat</button>');
+}
+
+function aiAsk(text) { document.getElementById('aiInput').value=text; aiSend(); }
+
+function addAIMessage(content, type) {
+  const container = document.getElementById('aiMessages');
+  const div = document.createElement('div');
+  div.className = 'ai-msg ai-msg-' + type;
+  if(type==='ai') {
+    div.innerHTML = content.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
+  } else { div.textContent = content; }
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+function aiSend() {
+  const input = document.getElementById('aiInput');
+  const q = input.value.trim();
+  if(!q) return;
+  addAIMessage(q, 'user');
+  input.value = '';
+  input.style.height = 'auto';
+  setTimeout(() => { const answer = processAIQuery(q); addAIMessage(answer, 'ai'); }, 200);
+}
+
+function processAIQuery(q) {
+  const ql = q.toLowerCase().replace(/[ıİ]/g,'i').replace(/[şŞ]/g,'s').replace(/[çÇ]/g,'c').replace(/[ğĞ]/g,'g').replace(/[üÜ]/g,'u').replace(/[öÖ]/g,'o');
+  const c = APP.data;
+  const todayStr = today();
+  const monthStr = todayStr.substring(0,7);
+
+  // ===== SEKTOR MEVZUAT =====
+  if(ql.includes('motat')) return '📋 **MoTAT Bilgisi:**\n'+SEKTOR_BILGI.motat;
+  if(ql.includes('ucbs')) return '📋 **UÇBS Bilgisi:**\n'+SEKTOR_BILGI.ucbs;
+  if(ql.includes('yonetmelik') || ql.includes('mevzuat') || ql.includes('kanun') || ql.includes('yasal')) return '⚖️ **Mevzuat:**\n'+SEKTOR_BILGI.yonetmelik;
+  if(ql.includes('lisans') && (ql.includes('nedir') || ql.includes('nasil') || ql.includes('sart'))) return '📄 **Lisans Bilgisi:**\n'+SEKTOR_BILGI.lisans;
+  if(ql.includes('tasima') || ql.includes('arac') && ql.includes('standart') || ql.includes('ts 13012') || ql.includes('tmgd') || ql.includes('adr')) return '🚛 **Taşıma Mevzuatı:**\n'+SEKTOR_BILGI.tasima;
+  if(ql.includes('ceza') || ql.includes('yaptirim') || ql.includes('para ceza')) return '⚠️ **Cezalar:**\n'+SEKTOR_BILGI.cezalar;
+  if(ql.includes('biyodizel') || ql.includes('geri kazanim')) return '♻️ **Geri Kazanım:**\n'+SEKTOR_BILGI.biyodizel;
+
+  // ===== BUGUNUN OZETI =====
+  if(ql.includes('bugun') && (ql.includes('ozet') || ql.includes('rapor') || ql.includes('durum') || ql.includes('toplam') || ql.includes('kac'))) {
+    const tRec = c.receipts.filter(r=>r.date===todayStr);
+    const tKg = tRec.reduce((s,r)=>s+r.quantity,0);
+    const tAmt = tRec.reduce((s,r)=>s+(r.grandTotal||0),0);
+    const tVis = c.visits.filter(v=>v.date===todayStr);
+    if(tRec.length===0) return '📊 **Bugün ('+formatDate(todayStr)+'):**\nHenüz alım kaydı yok.';
+    const byVeh = {};
+    tRec.forEach(r => { const k=r.vehiclePlate||'?'; if(!byVeh[k]) byVeh[k]={kg:0,n:0}; byVeh[k].kg+=r.quantity; byVeh[k].n++; });
+    let res = '📊 **Bugün ('+formatDate(todayStr)+'):**\n';
+    res += '• Toplam: **'+tKg+' kg** — '+formatMoney(tAmt)+'\n';
+    res += '• İşlem sayısı: '+tRec.length+'\n';
+    Object.entries(byVeh).forEach(([p,d])=>{ res+='• 🚛 '+p+': '+d.kg+' kg ('+d.n+' alım)\n'; });
+    return res;
+  }
+
+  // ===== AY OZETI =====
+  if(ql.includes('ay') && (ql.includes('ozet') || ql.includes('toplam') || ql.includes('rapor'))) {
+    const mRec = c.receipts.filter(r=>r.date.startsWith(monthStr));
+    const mKg = mRec.reduce((s,r)=>s+r.quantity,0);
+    const mAmt = mRec.reduce((s,r)=>s+(r.grandTotal||0),0);
+    const avgPrice = mKg>0 ? mAmt/mKg : 0;
+    const byCty = {};
+    mRec.forEach(r => { byCty[r.city||'?'] = (byCty[r.city||'?']||0)+r.quantity; });
+    let res = '📈 **Bu Ay:**\n• Toplam: **'+mKg+' kg** — '+formatMoney(mAmt)+'\n• Ortalama fiyat: '+formatMoney(avgPrice)+'/kg\n• İşlem: '+mRec.length+'\n';
+    res += '**İl bazlı:**\n';
+    Object.entries(byCty).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>{ res+='• '+k+': '+v+' kg\n'; });
+    return res;
+  }
+
+  // ===== GECIKMIS ZIYARETLER =====
+  if(ql.includes('gecik') || ql.includes('geciken')) {
+    const city = extractCity(ql);
+    let custs = c.customers.filter(x=>x.type==='periodic');
+    if(city) custs = custs.filter(x=>(x.city||'').toLowerCase()===city);
+    const overdue = custs.map(x=>({name:x.name,city:x.city,rem:getRemainingDays(x)})).filter(x=>x.rem!==null&&x.rem<0).sort((a,b)=>a.rem-b.rem);
+    if(overdue.length===0) return '✅ Gecikmiş ziyaret yok'+(city?' ('+city+')':'')+'.';
+    let res = '🔴 **Gecikmiş Ziyaretler'+(city?' — '+city:'')+' ('+overdue.length+'):**\n';
+    overdue.slice(0,15).forEach(x=>{ res+='• '+x.name+' ('+x.city+') — **'+Math.abs(x.rem)+' gün**\n'; });
+    if(overdue.length>15) res += '...ve '+(overdue.length-15)+' tane daha';
+    return res;
+  }
+
+  // ===== STOK DURUMU =====
+  if(ql.includes('stok') || ql.includes('depo')) {
+    const depot = c.depots[0]||{stock:0};
+    let res = '📦 **Stok Durumu:**\n';
+    res += '• Depo: **'+(depot.stock||0)+' kg**\n';
+    c.vehicles.forEach(v=>{ res+='• 🚛 '+v.plate+': '+(v.stock||0)+' kg ('+(v.personnel||[]).join(', ')+')\n'; });
+    const total = (depot.stock||0) + c.vehicles.reduce((s,v)=>s+(v.stock||0),0);
+    res += '• **Genel Toplam: '+total+' kg**';
+    return res;
+  }
+
+  // ===== CARİ / BORC =====
+  if(ql.includes('cari') || ql.includes('borc') || ql.includes('alacak') || ql.includes('bakiye')) {
+    const balances = [];
+    c.customers.forEach(cust => {
+      const txs = c.cariTransactions.filter(t=>t.customerId===cust.id);
+      if(txs.length===0) return;
+      let net=0; txs.forEach(t=>{net+=(t.borc||0)-(t.alacak||0);});
+      if(Math.abs(net)>1) balances.push({name:cust.name,city:cust.city,net});
+    });
+    balances.sort((a,b)=>b.net-a.net);
+    const totalBorc = balances.filter(b=>b.net>0).reduce((s,b)=>s+b.net,0);
+    const totalAlacak = balances.filter(b=>b.net<0).reduce((s,b)=>s+Math.abs(b.net),0);
+    let res = '💰 **Cari Bakiye Özeti:**\n';
+    res += '• Toplam borcumuz: '+formatMoney(totalBorc)+'\n';
+    res += '• Toplam alacağımız: '+formatMoney(totalAlacak)+'\n\n';
+    if(balances.length>0) {
+      res += '**En yüksek borçlar:**\n';
+      balances.filter(b=>b.net>0).slice(0,8).forEach(b=>{res+='• '+b.name+' ('+b.city+'): '+formatMoney(b.net)+'\n';});
+    }
+    return res;
+  }
+
+  // ===== MUSTERI SAYISI / BILGI =====
+  if(ql.includes('musteri') && (ql.includes('kac') || ql.includes('sayi') || ql.includes('toplam') || ql.includes('liste'))) {
+    const city = extractCity(ql);
+    let custs = c.customers;
+    if(city) custs = custs.filter(x=>(x.city||'').toLowerCase()===city);
+    const periodic = custs.filter(x=>x.type==='periodic').length;
+    const onDemand = custs.length - periodic;
+    let res = '👥 **Müşteri'+(city?' — '+city:'')+' ('+custs.length+'):**\n';
+    res += '• Periyodik: '+periodic+'\n• Talep üzerine: '+onDemand+'\n';
+    if(!city) {
+      const byCty = {};
+      custs.forEach(x=>{byCty[x.city||'?']=(byCty[x.city||'?']||0)+1;});
+      res += '**İl dağılımı:**\n';
+      Object.entries(byCty).sort((a,b)=>b[1]-a[1]).forEach(([k,v])=>{res+='• '+k+': '+v+'\n';});
+    }
+    return res;
+  }
+
+  // ===== TEKLIF DURUMU =====
+  if(ql.includes('teklif')) {
+    const pending = c.proposals.filter(p=>p.status==='pending');
+    const accepted = c.proposals.filter(p=>p.status==='accepted');
+    const followUp = c.proposals.filter(p=>p.followUp && p.followUpDate && p.status==='pending');
+    let res = '📋 **Teklif Durumu:**\n';
+    res += '• Bekleyen: '+pending.length+' | Kabul: '+accepted.length+' | Reddedilen: '+c.proposals.filter(p=>p.status==='rejected').length+'\n';
+    if(followUp.length>0) {
+      res += '\n**Takip gereken teklifler:**\n';
+      followUp.sort((a,b)=>a.followUpDate.localeCompare(b.followUpDate)).slice(0,8).forEach(p=>{
+        const d=daysBetween(todayStr,p.followUpDate);
+        res+='• '+p.businessName+': '+formatMoney(p.price)+'/kg — '+(d<0?Math.abs(d)+' gün gecikmiş':d===0?'BUGÜN':d+' gün sonra')+'\n';
+      });
+    }
+    return res;
+  }
+
+  // ===== ACIL TALEP =====
+  if(ql.includes('acil')) {
+    const pending = c.urgentRequests.filter(r=>r.status==='waiting');
+    if(pending.length===0) return '✅ Bekleyen acil talep yok.';
+    let res = '⚡ **Acil Talepler ('+pending.length+'):**\n';
+    pending.forEach(r=>{res+='• '+r.businessName+': ~'+(r.estimatedKg||'?')+' kg '+(r.priority==='urgent'?'🔴 ACİL':'🟡 Normal')+'\n';});
+    return res;
+  }
+
+  // ===== İL BAZLI SORGULAR =====
+  const city = extractCity(ql);
+  if(city && (ql.includes('durum') || ql.includes('ne') || ql.includes('nasil') || ql.length < 20)) {
+    const custs = c.customers.filter(x=>(x.city||'').toLowerCase()===city);
+    const mRec = c.receipts.filter(r=>r.date.startsWith(monthStr) && (r.city||'').toLowerCase()===city);
+    const mKg = mRec.reduce((s,r)=>s+r.quantity,0);
+    const overdue = custs.filter(x=>x.type==='periodic').map(x=>({name:x.name,rem:getRemainingDays(x)})).filter(x=>x.rem!==null&&x.rem<0);
+    let res = '🏙️ **'+city.charAt(0).toUpperCase()+city.slice(1)+' Durumu:**\n';
+    res += '• Müşteri: '+custs.length+'\n• Bu ay toplanan: '+mKg+' kg ('+mRec.length+' alım)\n';
+    if(overdue.length>0) { res+='• 🔴 Gecikmiş: '+overdue.length+' işletme\n'; overdue.slice(0,5).forEach(x=>{res+='  — '+x.name+' ('+Math.abs(x.rem)+' gün)\n';}); }
+    else res+='• ✅ Gecikmiş ziyaret yok\n';
+    return res;
+  }
+
+  // ===== ARAC BILGI =====
+  if(ql.includes('arac') && !ql.includes('standart')) {
+    let res = '🚛 **Araçlar ('+c.vehicles.length+'):**\n';
+    c.vehicles.forEach(v=>{
+      res+='• '+v.plate+': '+(v.stock||0)+' kg — '+(v.personnel||[]).join(', ')+'\n';
+    });
+    return res;
+  }
+
+  // ===== GENEL YARDIM =====
+  return '🤖 Bu soruyu tam anlayamadım. Şunları sorabilirsiniz:\n\n'+
+    '📊 **Veriler:** "Bugünün özeti", "Bu ay raporu", "Stok durumu"\n'+
+    '🏙️ **İl:** "Denizli durumu", "Antalya gecikmiş ziyaretler"\n'+
+    '💰 **Cari:** "Borç alacak özeti", "Cari bakiyeler"\n'+
+    '📋 **Teklif:** "Teklif durumu", "Acil talepler"\n'+
+    '⚖️ **Mevzuat:** "MoTAT nedir", "UÇBS nedir", "Yönetmelik", "Cezalar", "Taşıma kuralları", "Lisans şartları"\n'+
+    '♻️ **Sektör:** "Biyodizel", "Geri kazanım"';
+}
+
+function extractCity(q) {
+  const cities = ['denizli','afyon','afyonkarahisar','usak','isparta','burdur','antalya','kutahya','manisa','aydin'];
+  for(const c of cities) { if(q.includes(c)) return c==='afyonkarahisar'?'afyon':c; }
+  // Also check APP.data.cities
+  for(const c of (APP.data?.cities||[])) { if(q.includes(c.toLowerCase())) return c.toLowerCase(); }
+  return null;
+}
+
+// Auto-resize AI textarea
+document.addEventListener('input', function(e) {
+  if(e.target.id === 'aiInput') {
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 100) + 'px';
+  }
+});
 
 // ============================================================
 // KEYBOARD SHORTCUTS
