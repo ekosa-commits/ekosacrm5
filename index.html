@@ -784,8 +784,8 @@ input, select, textarea, button { font-family: var(--font); }
                       <span id="foSubtotal" style="font-weight:600;">₺0,00</span>
                     </div>
                     <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-                      <span style="color:var(--text-secondary);">KDV (%20):</span>
-                      <span id="foKdv">₺0,00</span>
+                      <span style="color:var(--text-secondary);">Fiyat (KDV Dahil):</span>
+                      <span id="foKdv" style="color:var(--success);">KDV Dahil</span>
                     </div>
                     <div style="display:flex;justify-content:space-between;font-size:18px;">
                       <span style="font-weight:700;">TOPLAM:</span>
@@ -883,8 +883,8 @@ input, select, textarea, button { font-family: var(--font); }
                     <div class="form-group">
                       <label class="form-label">Vade</label>
                       <div style="display:flex;gap:8px;">
-                        <button class="btn btn-secondary fo-vade-btn" onclick="foSelectVade('aninda',this)" style="flex:1;padding:12px;">Anında</button>
-                        <button class="btn btn-secondary fo-vade-btn" onclick="foSelectVade('vadeli',this)" style="flex:1;padding:12px;">Vadeli</button>
+                        <button class="btn btn-secondary fo-vade-btn" onclick="foSelectVade('aninda',this)" style="flex:1;padding:12px;">Anında Ödeme</button>
+                        <button class="btn btn-secondary fo-vade-btn" onclick="foSkipPayment()" style="flex:1;padding:12px;background:var(--warning);color:#fff;">Ödeme Yapılmadı</button>
                       </div>
                     </div>
 
@@ -1038,7 +1038,7 @@ input, select, textarea, button { font-family: var(--font); }
             <div class="widget">
               <div class="data-table-wrap">
                 <table class="data-table">
-                  <thead><tr><th>No</th><th>Tarih</th><th>İşletme</th><th>Miktar</th><th>Fiyat</th><th>Toplam</th><th>KDV</th><th>Ödeme</th><th>İşlem</th></tr></thead>
+                  <thead><tr><th>No</th><th>Tarih</th><th>İşletme</th><th>Miktar</th><th>Fiyat</th><th>Toplam</th><th>Ödeme</th><th>İşlem</th></tr></thead>
                   <tbody id="receiptsBody"></tbody>
                 </table>
               </div>
@@ -2227,6 +2227,33 @@ function renderDashboard() {
       </div>
     </div>
 
+    <!-- İl Bazlı Varil Raporu -->
+    <div class="widget">
+      <div class="widget-header">
+        <div class="widget-title">🛢️ İl Bazlı Varil Dağılımı</div>
+      </div>
+      <div class="widget-body">
+        ${(() => {
+          const byCity = {};
+          let totalBarrels = 0;
+          APP.data.customers.forEach(c => {
+            if(c.barrels && c.barrels > 0) {
+              const city = c.city || 'Bilinmiyor';
+              if(!byCity[city]) byCity[city] = {count:0, customers:0};
+              byCity[city].count += c.barrels;
+              byCity[city].customers++;
+              totalBarrels += c.barrels;
+            }
+          });
+          if(totalBarrels === 0) return '<div class="widget-empty">Varil kaydı yok</div>';
+          return `<div style="margin-bottom:8px;font-size:13px;">Toplam: <strong>${totalBarrels} varil</strong> (${Object.keys(byCity).length} il)</div>` +
+            Object.entries(byCity).sort((a,b)=>b[1].count-a[1].count).map(([city,d]) =>
+              `<div class="wlist-item"><div class="wlist-left"><div class="wlist-name">${city}</div><div class="wlist-sub">${d.customers} işletme</div></div><div class="wlist-right"><span class="wlist-tag tag-blue">${d.count} varil</span></div></div>`
+            ).join('');
+        })()}
+      </div>
+    </div>
+
     <!-- AI Asistan Widget -->
     <div class="widget" style="grid-column:1/-1;">
       <div class="widget-header" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);border:none;">
@@ -2535,9 +2562,10 @@ function foSelectCustomer(id) {
     </div>
   `;
 
-  // Fill vehicle dropdown
+  // Fill vehicle dropdown — auto-select last used vehicle
   const vehSelect = document.getElementById('foVehicle');
-  vehSelect.innerHTML = '<option value="">Araç seçin</option>' + APP.data.vehicles.map(v => `<option value="${v.id}">${v.plate} (${(v.personnel||[]).join(', ')})</option>`).join('');
+  const lastVeh = localStorage.getItem('ekosa_last_vehicle') || '';
+  vehSelect.innerHTML = '<option value="">Araç seçin (zorunlu)</option>' + APP.data.vehicles.map(v => `<option value="${v.id}" ${v.id===lastVeh?'selected':''}>${v.plate} (${(v.personnel||[]).join(', ')}) — ${formatKg(v.stock||0)}</option>`).join('');
 
   // Pre-fill price (nakit default)
   foState.priceType = 'nakit';
@@ -2608,11 +2636,9 @@ function foCalcTotal() {
   const qty = parseFloat(document.getElementById('foQty')?.value) || 0;
   const price = parseFloat(document.getElementById('foPrice')?.value) || 0;
   const subtotal = qty * price;
-  const kdv = subtotal * 0.20;
-  const grand = subtotal + kdv;
   document.getElementById('foSubtotal').textContent = formatMoney(subtotal);
-  document.getElementById('foKdv').textContent = formatMoney(kdv);
-  document.getElementById('foGrandTotal').textContent = formatMoney(grand);
+  document.getElementById('foKdv').textContent = '(KDV Dahil)';
+  document.getElementById('foGrandTotal').textContent = formatMoney(subtotal);
 }
 
 function foSaveCollection() {
@@ -2625,7 +2651,11 @@ function foSaveCollection() {
   const vehicle = APP.data.vehicles.find(v=>v.id===vehicleId);
 
   const subtotal = qty * price;
-  const kdv = subtotal * 0.20;
+
+  // Araç zorunlu kontrolü
+  if(!vehicleId) { toast('Araç seçimi zorunludur','error'); return; }
+  // Son seçilen aracı hatırla
+  localStorage.setItem('ekosa_last_vehicle', vehicleId);
 
   // Create receipt
   APP.data.receiptCounter++;
@@ -2635,11 +2665,12 @@ function foSaveCollection() {
     id: uid(), receiptNo, date: today(),
     customerId: c.id, customerName: c.name,
     city: c.city||'', district: c.district||'',
-    quantity: qty, unitPrice: price, total: subtotal, kdv, grandTotal: subtotal+kdv,
+    quantity: qty, unitPrice: price, total: subtotal, kdv: 0, grandTotal: subtotal,
     paymentMethods: [], vade: 'aninda',
     printType: 'fiyatli',
     vehicleId: vehicleId||null, vehiclePlate: vehicle?.plate||'',
     personnelName: APP.currentUser?.name||'',
+    priceType: foState.priceType||'nakit',
     createdAt: new Date().toISOString()
   };
   APP.data.receipts.push(receipt);
@@ -2665,10 +2696,10 @@ function foSaveCollection() {
   const custIdx = APP.data.customers.findIndex(x=>x.id===c.id);
   if(custIdx>=0) APP.data.customers[custIdx].lastVisit = today();
 
-  // Cari borç
+  // Cari borç (KDV dahil fiyat, ek KDV yok)
   APP.data.cariTransactions.push({
     id:uid(), customerId:c.id, date:today(), type:'alim',
-    description:'Alım: '+receiptNo+' ('+qty+' kg)', borc:subtotal+kdv, alacak:0
+    description:'Alım: '+receiptNo+' ('+qty+' kg)', borc:subtotal, alacak:0
   });
 
   saveData();
@@ -2692,7 +2723,7 @@ function foSaveCollection() {
       <div style="display:flex;flex-wrap:wrap;gap:16px;font-size:14px;">
         <span>📦 <strong>${qty} kg</strong></span>
         <span>💵 <strong>${formatMoney(price)}/kg</strong></span>
-        <span>💰 <strong>${formatMoney(subtotal+kdv)}</strong></span>
+        <span>💰 <strong>${formatMoney(subtotal)}</strong></span>
       </div>
       <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(76,175,80,0.2);font-size:13px;color:var(--text-secondary);">
         ⬇️ Aşağıdan ödeme işlemini tamamlayın ve teslim fişi yazdırın
@@ -2707,7 +2738,7 @@ function foSaveCollection() {
   document.getElementById('fo-complete').style.display = 'none';
 
   // 4) Pre-fill payment
-  document.getElementById('foPayAmount').value = (subtotal+kdv).toFixed(2);
+  document.getElementById('foPayAmount').value = subtotal.toFixed(2);
   if(c.fuelCardNo) document.getElementById('foFuelCardNo').textContent = c.fuelCardNo;
 
   // 5) Reset & pre-select payment type
@@ -2833,6 +2864,18 @@ function foSelectVade(type, btn) {
   foState.vade = type;
   document.querySelectorAll('.fo-vade-btn').forEach(b=>b.className='btn btn-secondary fo-vade-btn');
   btn.className = 'btn btn-primary fo-vade-btn';
+}
+
+function foSkipPayment() {
+  // Save receipt without payment — can add payment later from Makbuzlar
+  const receipt = foState.lastReceipt;
+  if(receipt) {
+    receipt.vade = 'odemesiz';
+    receipt.paymentMethods = [];
+  }
+  saveData();
+  toast('📋 Alım ödemesiz kaydedildi. Makbuzlar bölümünden ödeme ekleyebilirsiniz.', 'info');
+  foShowComplete();
 }
 
 function foLoadFuelCard() {
@@ -3360,22 +3403,31 @@ function renderReceipts() {
   if(dateTo) receipts = receipts.filter(r=>r.date<=dateTo);
   if(cityF) receipts = receipts.filter(r=>r.city===cityF);
 
-  tbody.innerHTML = receipts.map(r => `<tr>
+  tbody.innerHTML = receipts.map(r => {
+    const totalPaid = (r.paymentMethods||[]).reduce((s,pm)=>s+(pm.amount||0),0);
+    const remaining = (r.total||0) - totalPaid;
+    const payStatus = remaining <= 0 ? '<span class="status status-done">Ödendi</span>' :
+      totalPaid > 0 ? '<span class="status status-waiting">Kısmi ('+formatMoney(remaining)+')</span>' :
+      r.vade==='odemesiz' ? '<span class="status status-cancelled">Ödemesiz</span>' :
+      '<span class="status status-pending">Bekliyor</span>';
+    const payDetail = (r.paymentMethods||[]).map(pm=>(pm.type==='nakit'?'💵':pm.type==='eft'?'🏦':'⛽')+formatMoney(pm.amount)).join(' ');
+    return `<tr>
     <td>${r.receiptNo}</td>
     <td>${formatDate(r.date)}</td>
     <td>${r.customerName||'-'}</td>
     <td>${r.quantity} kg</td>
     <td>${formatMoney(r.unitPrice)}/kg</td>
-    <td>${formatMoney(r.total)}</td>
-    <td>${formatMoney(r.kdv)}</td>
-    <td>${r.paymentMethods?.map(pm=>(pm.type==='nakit'?'💵':pm.type==='eft'?'🏦':'⛽')+' '+formatMoney(pm.amount)).join(', ')||'-'}</td>
+    <td style="font-weight:600;">${formatMoney(r.total)}</td>
+    <td>${payStatus}${payDetail?' '+payDetail:''}</td>
     <td style="white-space:nowrap;">
+      ${remaining > 0 ? `<button class="btn btn-sm btn-primary" onclick="openAddPaymentModal('${r.id}')" title="Ödeme Ekle">💰</button>` : ''}
       <button class="btn btn-sm btn-secondary" onclick="openEditReceiptModal('${r.id}')">✏️</button>
-      <button class="btn btn-sm btn-primary" onclick="printReceiptRawBT('${r.id}')">🖨️</button>
+      <button class="btn btn-sm btn-secondary" onclick="printReceiptRawBT('${r.id}')">🖨️</button>
       <button class="btn btn-sm btn-secondary" onclick="generateTeslimFisiPDF('${r.id}')" title="PDF">📄</button>
       <button class="btn btn-sm btn-danger" onclick="deleteReceipt('${r.id}')">🗑️</button>
     </td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 
   // Tediye
   const tediyeBody = document.getElementById('tediyeBody');
@@ -3403,6 +3455,100 @@ function renderReceipts() {
 }
 function filterReceipts() { renderReceipts(); }
 function filterTediye() { renderReceipts(); }
+
+// Add Payment to existing receipt
+function openAddPaymentModal(id) {
+  const r = APP.data.receipts.find(x=>x.id===id);
+  if(!r) return;
+  const totalPaid = (r.paymentMethods||[]).reduce((s,pm)=>s+(pm.amount||0),0);
+  const remaining = (r.total||0) - totalPaid;
+  const customer = APP.data.customers.find(c=>c.id===r.customerId);
+
+  const body = `
+    <div style="background:var(--bg);padding:12px;border-radius:var(--radius-sm);margin-bottom:16px;">
+      <div style="font-size:13px;"><strong>${r.customerName}</strong> — ${r.receiptNo}</div>
+      <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">
+        ${r.quantity} kg × ${formatMoney(r.unitPrice)}/kg = <strong>${formatMoney(r.total)}</strong>
+      </div>
+      <div style="font-size:12px;margin-top:4px;">
+        Ödenen: ${formatMoney(totalPaid)} — <span style="color:var(--danger);font-weight:600;">Kalan: ${formatMoney(remaining)}</span>
+      </div>
+      ${(r.paymentMethods||[]).length ? `<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">
+        Mevcut: ${r.paymentMethods.map(pm=>(pm.type==='nakit'?'Nakit':pm.type==='eft'?'EFT':'Y.Kartı')+' '+formatMoney(pm.amount)).join(', ')}
+      </div>` : ''}
+    </div>
+    <div class="form-group"><label class="form-label">Ödeme Yöntemi</label>
+      <select class="form-select" id="mAddPayType">
+        <option value="nakit">💵 Nakit</option>
+        <option value="eft">🏦 EFT / Havale</option>
+        <option value="yakit_karti">⛽ Yakıt Kartı</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Tutar (₺)</label>
+      <input class="form-input" type="number" step="0.01" id="mAddPayAmount" value="${remaining.toFixed(2)}" style="font-size:18px;text-align:center;padding:14px;">
+    </div>
+    ${customer?.paymentPersons?.length ? `
+    <hr style="margin:12px 0;border-color:var(--border);">
+    <div class="form-group"><label class="form-label">Nakit İse — Tediye Kişisi</label>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+        ${customer.paymentPersons.map((p,i)=>`<button class="btn btn-sm btn-secondary" onclick="document.getElementById('mAddPayName').value='${p.name}';document.getElementById('mAddPayTC').value='${p.tc||''}';" style="font-size:11px;">${p.name}</button>`).join('')}
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Ad Soyad</label><input class="form-input" id="mAddPayName" placeholder="Ad Soyad"></div>
+        <div class="form-group"><label class="form-label">TC</label><input class="form-input" id="mAddPayTC" placeholder="TC Kimlik" maxlength="11"></div>
+      </div>
+    </div>
+    ` : ''}
+  `;
+  openModal('💰 Ödeme Ekle — '+r.receiptNo, body, `
+    <button class="btn btn-secondary" onclick="closeModal()">İptal</button>
+    <button class="btn btn-primary" onclick="saveAddPayment('${id}')">Ödemeyi Kaydet</button>
+  `);
+}
+
+function saveAddPayment(id) {
+  const r = APP.data.receipts.find(x=>x.id===id);
+  if(!r) return;
+  const type = document.getElementById('mAddPayType').value;
+  const amount = parseFloat(document.getElementById('mAddPayAmount').value)||0;
+  if(amount<=0) { toast('Tutar girin','error'); return; }
+
+  // Add payment to receipt
+  if(!r.paymentMethods) r.paymentMethods = [];
+  r.paymentMethods.push({type, amount});
+  r.vade = 'aninda';
+
+  // Add cari alacak
+  APP.data.cariTransactions.push({
+    id:uid(), customerId:r.customerId, date:today(), type:'odeme',
+    description:(type==='nakit'?'Nakit':type==='eft'?'EFT':'Yakıt Kartı')+' ödeme ('+r.receiptNo+')',
+    borc:0, alacak:amount
+  });
+
+  // If nakit, create tediye
+  if(type === 'nakit') {
+    const name = document.getElementById('mAddPayName')?.value?.trim()||'';
+    const tc = document.getElementById('mAddPayTC')?.value?.trim()||'';
+    if(name) {
+      APP.data.tediyeCounter++;
+      const tediyeNo = 'TDY-' + String(APP.data.tediyeCounter).padStart(4,'0');
+      APP.data.tediye.push({
+        id:uid(), tediyeNo, date:today(),
+        customerId:r.customerId, personName:name, personTC:tc,
+        amount, city:r.city||'', district:r.district||'',
+        product:'Atık Bitkisel Yağ', receiptId:id,
+        createdAt:new Date().toISOString()
+      });
+      toast('💰 Ödeme + tediye kaydedildi: '+formatMoney(amount));
+    } else {
+      toast('💰 Ödeme kaydedildi: '+formatMoney(amount));
+    }
+  } else {
+    toast('💰 Ödeme kaydedildi: '+formatMoney(amount));
+  }
+
+  saveData(); closeModal(); renderReceipts();
+}
 
 // Edit Receipt Modal
 function openEditReceiptModal(id) {
@@ -3437,8 +3583,7 @@ function calcEditReceiptTotal() {
   const qty = parseFloat(document.getElementById('mEditRecQty')?.value)||0;
   const price = parseFloat(document.getElementById('mEditRecPrice')?.value)||0;
   const total = qty * price;
-  const kdv = total * 0.20;
-  document.getElementById('mEditRecGrandTotal').value = (total + kdv).toFixed(2);
+  document.getElementById('mEditRecGrandTotal').value = total.toFixed(2);
 }
 
 function saveEditReceipt(id) {
@@ -3449,8 +3594,6 @@ function saveEditReceipt(id) {
   const qty = parseFloat(document.getElementById('mEditRecQty').value)||0;
   const price = parseFloat(document.getElementById('mEditRecPrice').value)||0;
   const total = qty * price;
-  const kdv = total * 0.20;
-
   APP.data.receipts[idx].date = document.getElementById('mEditRecDate').value;
   APP.data.receipts[idx].customerId = customerId;
   APP.data.receipts[idx].customerName = customer?.name||'';
@@ -3459,8 +3602,8 @@ function saveEditReceipt(id) {
   APP.data.receipts[idx].quantity = qty;
   APP.data.receipts[idx].unitPrice = price;
   APP.data.receipts[idx].total = total;
-  APP.data.receipts[idx].kdv = kdv;
-  APP.data.receipts[idx].grandTotal = total + kdv;
+  APP.data.receipts[idx].kdv = 0;
+  APP.data.receipts[idx].grandTotal = total;
   APP.data.receipts[idx].printType = document.getElementById('mEditRecPrintType').value;
 
   saveData(); closeModal(); renderReceipts();
@@ -3777,8 +3920,7 @@ function openReceiptModal() {
       <div class="form-group"><label class="form-label">Toplam</label><input class="form-input" id="mRecTotal" readonly></div>
     </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">KDV (%20)</label><input class="form-input" id="mRecKDV" readonly></div>
-      <div class="form-group"><label class="form-label">Genel Toplam</label><input class="form-input" id="mRecGrandTotal" readonly style="font-weight:700;"></div>
+      <div class="form-group"><label class="form-label">Toplam (KDV Dahil)</label><input class="form-input" id="mRecGrandTotal" readonly style="font-weight:700;font-size:16px;"></div>
     </div>
     <hr style="margin:12px 0;border-color:var(--border);">
     <div class="form-group"><label class="form-label">Ödeme Yöntemi</label>
@@ -3817,10 +3959,8 @@ function calcReceiptTotal() {
   const qty = parseFloat(document.getElementById('mRecQty')?.value)||0;
   const price = parseFloat(document.getElementById('mRecPrice')?.value)||0;
   const total = qty * price;
-  const kdv = total * 0.20;
   document.getElementById('mRecTotal').value = total.toFixed(2);
-  document.getElementById('mRecKDV').value = kdv.toFixed(2);
-  document.getElementById('mRecGrandTotal').value = (total + kdv).toFixed(2);
+  document.getElementById('mRecGrandTotal').value = total.toFixed(2);
 }
 
 function addPaymentMethod() {
@@ -3845,7 +3985,6 @@ function saveReceipt() {
   const qty = parseFloat(document.getElementById('mRecQty').value)||0;
   const price = parseFloat(document.getElementById('mRecPrice').value)||0;
   const total = qty * price;
-  const kdv = total * 0.20;
 
   const paymentMethods = [];
   document.querySelectorAll('#paymentMethodsList > div').forEach(row => {
@@ -3858,7 +3997,7 @@ function saveReceipt() {
     id: uid(), receiptNo, date: document.getElementById('mRecDate').value || today(),
     customerId, customerName: customer?.name||'',
     city: customer?.city||'', district: customer?.district||'',
-    quantity: qty, unitPrice: price, total, kdv, grandTotal: total+kdv,
+    quantity: qty, unitPrice: price, total, kdv:0, grandTotal: total,
     paymentMethods,
     vade: document.getElementById('mRecVade').value,
     printType: document.getElementById('mRecPrintType').value,
@@ -3875,10 +4014,10 @@ function saveReceipt() {
   // Update customer last visit
   if(customer) customer.lastVisit = receipt.date;
 
-  // Add cari transaction (borç)
+  // Add cari transaction (borç - KDV dahil fiyat)
   APP.data.cariTransactions.push({
     id:uid(), customerId, date:receipt.date, type:'alim',
-    description:'Alım: '+receiptNo, borc:receipt.grandTotal, alacak:0
+    description:'Alım: '+receiptNo, borc:receipt.total, alacak:0
   });
 
   // If nakit payment, auto create tediye
@@ -3945,21 +4084,88 @@ function printTediye(id, size) {
 // ============================================================
 function renderVehicles() {
   const container = document.getElementById('vehicleCards');
-  container.innerHTML = APP.data.vehicles.map(v => `
+  const todayStr = today();
+  container.innerHTML = APP.data.vehicles.map(v => {
+    // Calculate today's stats for this vehicle
+    const todayRecs = APP.data.receipts.filter(r=>r.vehicleId===v.id && r.date===todayStr);
+    const todayKg = todayRecs.reduce((s,r)=>s+r.quantity,0);
+    const todayAmt = todayRecs.reduce((s,r)=>s+(r.total||0),0);
+    // Avg price calculation: nakit=same, yakıt/fatura=%20 düş
+    let adjTotal=0, adjKg=0;
+    const allVehRecs = APP.data.receipts.filter(r=>r.vehicleId===v.id);
+    allVehRecs.forEach(r => {
+      const isYakit = r.priceType==='yakit_karti' || r.priceType==='fatura' || r.paymentMethods?.some(pm=>pm.type==='yakit_karti');
+      adjTotal += isYakit ? r.total*0.8 : r.total;
+      adjKg += r.quantity;
+    });
+    const avgPrice = adjKg > 0 ? adjTotal/adjKg : 0;
+
+    return `
     <div class="widget">
       <div class="widget-header">
         <div class="widget-title">🚛 ${v.plate}</div>
         <span class="wlist-tag ${v.stock>0?'tag-blue':'tag-green'}">${formatKg(v.stock||0)}</span>
       </div>
       <div class="widget-body">
-        <div style="font-size:13px;margin-bottom:8px;"><strong>Personel:</strong> ${(v.personnel||[]).join(', ')||'-'}</div>
-        <div style="display:flex;gap:8px;margin-top:12px;">
+        <div style="font-size:13px;margin-bottom:4px;"><strong>Personel:</strong> ${(v.personnel||[]).join(', ')||'-'}</div>
+        ${todayKg>0?`<div style="font-size:12px;color:var(--text-secondary);">Bugün: ${todayKg} kg (${todayRecs.length} alım) — ${formatMoney(todayAmt)}</div>`:''}
+        ${avgPrice>0?`<div style="font-size:12px;color:var(--text-secondary);">Ort. Alış: ${formatMoney(avgPrice)}/kg</div>`:''}
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
           <button class="btn btn-sm btn-primary" onclick="emptyVehicle('${v.id}')" ${(v.stock||0)<=0?'disabled':''}>Depoya Boşalt</button>
+          <button class="btn btn-sm btn-secondary" onclick="showVehicleDetail('${v.id}')">📊 Detay</button>
           <button class="btn btn-sm btn-secondary admin-only" onclick="openVehicleModal('${v.id}')">Düzenle</button>
         </div>
       </div>
+    </div>`;
+  }).join('') || '<div class="widget-empty" style="padding:40px;">Araç kaydı yok. Admin panelinden ekleyin.</div>';
+}
+
+function showVehicleDetail(vehicleId) {
+  const v = APP.data.vehicles.find(x=>x.id===vehicleId);
+  if(!v) return;
+  const todayStr = today();
+  const todayRecs = APP.data.receipts.filter(r=>r.vehicleId===vehicleId && r.date===todayStr);
+  const allRecs = APP.data.receipts.filter(r=>r.vehicleId===vehicleId);
+
+  // Avg price with nakit/yakıt adjustment
+  let adjTotal=0, adjKg=0;
+  allRecs.forEach(r => {
+    const isYakit = r.priceType==='yakit_karti' || r.priceType==='fatura' || r.paymentMethods?.some(pm=>pm.type==='yakit_karti');
+    adjTotal += isYakit ? r.total*0.8 : r.total;
+    adjKg += r.quantity;
+  });
+  const avgPrice = adjKg > 0 ? adjTotal/adjKg : 0;
+
+  const todayList = todayRecs.map(r => {
+    const isYakit = r.priceType==='yakit_karti' || r.priceType==='fatura' || r.paymentMethods?.some(pm=>pm.type==='yakit_karti');
+    const adjPrice = isYakit ? r.unitPrice*0.8 : r.unitPrice;
+    return `<tr><td>${r.customerName}</td><td>${r.quantity} kg</td><td>${formatMoney(r.unitPrice)}/kg</td><td>${isYakit?formatMoney(adjPrice)+'/kg':'-'}</td><td>${formatMoney(r.total)}</td></tr>`;
+  }).join('');
+
+  const body = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
+      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:var(--radius-sm);">
+        <div style="font-size:18px;font-weight:700;color:var(--accent);">${formatKg(v.stock||0)}</div>
+        <div style="font-size:11px;color:var(--text-secondary);">Araçta Stok</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:var(--radius-sm);">
+        <div style="font-size:18px;font-weight:700;color:var(--info);">${formatMoney(avgPrice)}/kg</div>
+        <div style="font-size:11px;color:var(--text-secondary);">Ort. Alış Fiyatı</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:var(--radius-sm);">
+        <div style="font-size:18px;font-weight:700;">${formatKg(adjKg)}</div>
+        <div style="font-size:11px;color:var(--text-secondary);">Toplam Alım</div>
+      </div>
     </div>
-  `).join('') || '<div class="widget-empty" style="padding:40px;">Araç kaydı yok. Admin panelinden ekleyin.</div>';
+    <h4 style="font-size:13px;margin-bottom:8px;">📅 Bugünkü Alımlar (${todayRecs.length})</h4>
+    ${todayRecs.length ? `<div class="data-table-wrap"><table class="data-table">
+      <thead><tr><th>İşletme</th><th>Miktar</th><th>Fiyat</th><th>Düz. Fiyat</th><th>Tutar</th></tr></thead>
+      <tbody>${todayList}</tbody>
+      <tfoot><tr style="font-weight:700;background:var(--bg);"><td>TOPLAM</td><td>${todayRecs.reduce((s,r)=>s+r.quantity,0)} kg</td><td colspan="2"></td><td>${formatMoney(todayRecs.reduce((s,r)=>s+(r.total||0),0))}</td></tr></tfoot>
+    </table></div>` : '<div style="color:var(--text-light);font-size:13px;">Bugün alım yok</div>'}
+    <div style="font-size:10px;color:var(--text-light);margin-top:12px;">* Düz. Fiyat: Yakıt kartı/faturalı alımlarda %20 düşülmüş ortalama hesaplama fiyatı</div>
+  `;
+  openModal('🚛 '+v.plate+' — Araç Detay', body, '<button class="btn btn-secondary" onclick="closeModal()">Kapat</button>', '700px');
 }
 
 function openVehicleModal(id) {
@@ -4049,15 +4255,18 @@ function renderDepot() {
     </div>
   `;
 
-  // Recent entries
-  const entries = [...APP.data.depotEntries].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
+  // Recent entries (with delete)
+  const entries = [...APP.data.depotEntries].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,20);
   document.getElementById('depotMovements').innerHTML = entries.length ? entries.map(e => `
     <div class="wlist-item">
       <div class="wlist-left">
         <div class="wlist-name">🚛 ${e.vehiclePlate} → Depo</div>
-        <div class="wlist-sub">${formatDate(e.date)}</div>
+        <div class="wlist-sub">${formatDate(e.date)} — ${formatKg(e.quantity)}</div>
       </div>
-      <div class="wlist-right"><span class="wlist-tag tag-green">+${formatKg(e.quantity)}</span></div>
+      <div class="wlist-right" style="gap:6px;">
+        <span class="wlist-tag tag-green">+${formatKg(e.quantity)}</span>
+        <button class="btn btn-sm btn-danger" onclick="deleteDepotEntry('${e.id}')" style="padding:4px 8px;font-size:10px;">✕</button>
+      </div>
     </div>
   `).join('') : '<div class="widget-empty">Henüz hareket yok</div>';
 
@@ -4139,6 +4348,22 @@ function deleteDepotExit(id) {
   }
 }
 
+function deleteDepotEntry(id) {
+  const entry = APP.data.depotEntries.find(e=>e.id===id);
+  if(!entry) return;
+  if(!confirm(`${entry.vehiclePlate} aracından ${formatKg(entry.quantity)} giriş kaydını silmek istiyor musunuz?\n\nDepo stoktan düşülecek.`)) return;
+  // Reverse depot stock
+  const depot = APP.data.depots[0];
+  if(depot) {
+    depot.stock = Math.max(0, (depot.stock||0) - entry.quantity);
+    depot.totalCost = Math.max(0, (depot.totalCost||0) - (entry.cost||0));
+  }
+  APP.data.depotEntries = APP.data.depotEntries.filter(e=>e.id!==id);
+  deleteFromFirestore('depotEntries', id);
+  saveData(); renderDepot();
+  toast('Depo giriş kaydı silindi');
+}
+
 // ============================================================
 // URGENT REQUESTS
 // ============================================================
@@ -4156,7 +4381,7 @@ function renderUrgentRequests() {
       ${r.status==='waiting'?`
         <button class="btn btn-sm btn-primary" onclick="updateUrgentStatus('${r.id}','done')">Alındı</button>
         <button class="btn btn-sm btn-danger" onclick="updateUrgentStatus('${r.id}','cancelled')">İptal</button>
-      `:''}
+      `:`<button class="btn btn-sm btn-danger" onclick="deleteUrgent('${r.id}')">Sil</button>`}
     </td>
   </tr>`).join('');
 }
@@ -4209,6 +4434,14 @@ function updateUrgentStatus(id, status) {
   if(r) { r.status = status; r.updatedAt = new Date().toISOString(); }
   saveData(); renderUrgentRequests();
   toast(status==='done'?'Talep alındı olarak işaretlendi':'Talep iptal edildi');
+}
+
+function deleteUrgent(id) {
+  if(!confirm('Bu talebi silmek istiyor musunuz?')) return;
+  APP.data.urgentRequests = APP.data.urgentRequests.filter(r=>r.id!==id);
+  deleteFromFirestore('urgentRequests', id);
+  saveData(); renderUrgentRequests();
+  toast('Talep silindi');
 }
 
 // ============================================================
@@ -4718,36 +4951,105 @@ function generateReport() {
 }
 
 function exportReport(format) {
-  toast('Dışa aktarma hazırlanıyor...','info');
-  // CSV export
-  if(format==='csv') {
-    const table = document.querySelector('#page-reports .data-table');
-    let csv = '';
-    table.querySelectorAll('tr').forEach(tr => {
-      const cells = [];
-      tr.querySelectorAll('th,td').forEach(td => cells.push('"'+td.textContent+'"'));
-      csv += cells.join(',')+'\n';
-    });
+  const type = document.getElementById('reportType')?.value || 'cityCollection';
+  const period = document.getElementById('reportPeriod')?.value || 'daily';
+  const reportNames = {cityCollection:'İl Bazlı Toplama',cityPrice:'İl Bazlı Fiyat Ortalaması',vehicleDaily:'Araç Bazlı',personnelPerf:'Personel Performans',top10:'Top 10 İşletme',businessDetail:'İşletme Bazlı'};
+  const reportTitle = reportNames[type] || 'Rapor';
+
+  // Gather table data
+  const table = document.querySelector('#page-reports .data-table');
+  const headers = [];
+  const rows = [];
+  table.querySelectorAll('thead th').forEach(th => headers.push(th.textContent));
+  table.querySelectorAll('tbody tr').forEach(tr => {
+    const row = [];
+    tr.querySelectorAll('td').forEach(td => row.push(td.textContent.trim()));
+    if(row.length) rows.push(row);
+  });
+
+  if(format === 'csv') {
+    let csv = headers.map(h=>'"'+h+'"').join(',')+'\n';
+    rows.forEach(r => { csv += r.map(c=>'"'+c+'"').join(',')+'\n'; });
     const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'ekosa_rapor_'+today()+'.csv';
+    a.download = 'ekosa_'+type+'_'+today()+'.csv';
     a.click();
+    toast('✅ Excel dosyası indirildi');
+  }
+  else if(format === 'pdf') {
+    const tableRows = rows.map(r => '<tr>'+r.map(c=>'<td style="padding:6px 10px;border-bottom:1px solid #eee;font-size:11px;">'+c+'</td>').join('')+'</tr>').join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      @page{size:A4 landscape;margin:15mm}
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#333;padding:20px}
+      table{width:100%;border-collapse:collapse;margin-top:16px}
+      th{background:#1B2A4A;color:#fff;padding:8px 10px;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;text-align:left}
+      .title-bar{background:linear-gradient(135deg,#1B2A4A,#2C3E6B);color:#fff;padding:10px 16px;border-radius:6px;text-align:center;margin:14px 0;font-size:14px;font-weight:700}
+    </style></head><body>
+    ${pdfBaslik()}
+    <div class="title-bar">${reportTitle} Raporu</div>
+    <div style="font-size:11px;color:#888;margin-bottom:8px;">Dönem: ${period==='daily'?'Günlük':period==='weekly'?'Haftalık':period==='monthly'?'Aylık':period==='yearly'?'Yıllık':'Özel'} — Tarih: ${formatDate(today())}</div>
+    <table>
+      <thead><tr>${headers.map(h=>'<th>'+h+'</th>').join('')}</tr></thead>
+      <tbody>${tableRows}</tbody>
+    </table>
+    ${pdfAltBilgi()}
+    </body></html>`;
+    const w = window.open('','_blank');
+    w.document.write(html); w.document.close();
+    setTimeout(()=>w.print(), 500);
   }
 }
 
 function exportTediye(format) {
-  toast('Dışa aktarma hazırlanıyor...','info');
+  const tediye = [...APP.data.tediye].sort((a,b)=>b.date.localeCompare(a.date));
+  // Apply filters
+  const dateFrom = document.getElementById('tediyeDateFrom')?.value || '';
+  const dateTo = document.getElementById('tediyeDateTo')?.value || '';
+  const cityF = document.getElementById('tediyeCityFilter')?.value || '';
+  let filtered = tediye;
+  if(dateFrom) filtered = filtered.filter(t=>t.date>=dateFrom);
+  if(dateTo) filtered = filtered.filter(t=>t.date<=dateTo);
+  if(cityF) filtered = filtered.filter(t=>t.city===cityF);
+
   if(format==='csv') {
     let csv = 'No,Tarih,Ad Soyad,TC,İl,İlçe,Tutar\n';
-    APP.data.tediye.forEach(t => {
-      csv += `"${t.tediyeNo}","${t.date}","${t.personName}","${t.personTC}","${t.city}","${t.district}","${t.amount}"\n`;
+    filtered.forEach(t => {
+      csv += `"${t.tediyeNo}","${formatDate(t.date)}","${t.personName}","${t.personTC}","${t.city}","${t.district}","${t.amount}"\n`;
     });
     const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'});
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = 'tediye_makbuzlari_'+today()+'.csv';
     a.click();
+    toast('✅ Tediye Excel indirildi');
+  }
+  else if(format==='pdf') {
+    const total = filtered.reduce((s,t)=>s+(t.amount||0),0);
+    const rows = filtered.map(t=>`<tr><td>${t.tediyeNo}</td><td>${formatDate(t.date)}</td><td>${t.personName}</td><td>${t.personTC}</td><td>${t.city||'-'}</td><td style="text-align:right;font-weight:600;">${formatMoney(t.amount)}</td></tr>`).join('');
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      @page{size:A4;margin:15mm}*{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#333;padding:20px}
+      table{width:100%;border-collapse:collapse;margin-top:16px}
+      th{background:#1B2A4A;color:#fff;padding:8px 10px;font-size:10px;text-transform:uppercase;text-align:left}
+      td{padding:6px 10px;border-bottom:1px solid #eee}
+      tr:nth-child(even) td{background:#fafafa}
+      .title-bar{background:linear-gradient(135deg,#1B2A4A,#2C3E6B);color:#fff;padding:10px 16px;border-radius:6px;text-align:center;margin:14px 0;font-size:14px;font-weight:700}
+    </style></head><body>
+    ${pdfBaslik()}
+    <div class="title-bar">TEDİYE MAKBUZLARI RAPORU</div>
+    <div style="font-size:11px;color:#888;margin-bottom:4px;">Toplam: ${filtered.length} makbuz — ${formatMoney(total)}</div>
+    <table>
+      <thead><tr><th>No</th><th>Tarih</th><th>Ad Soyad</th><th>TC</th><th>İl</th><th style="text-align:right;">Tutar</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="background:#f5f5f5;font-weight:700;"><td colspan="5" style="padding:8px 10px;text-align:right;">TOPLAM</td><td style="padding:8px 10px;text-align:right;font-size:13px;">${formatMoney(total)}</td></tr></tfoot>
+    </table>
+    ${pdfAltBilgi()}
+    </body></html>`;
+    const w = window.open('','_blank');
+    w.document.write(html); w.document.close();
+    setTimeout(()=>w.print(), 500);
   }
 }
 
@@ -4904,8 +5206,18 @@ function switchAdminTab(tab) {
   }
   else if(tab==='productsAdmin') {
     content.innerHTML = `
-      <div class="widget"><div class="widget-body">${APP.data.productTypes.map(p=>`
-        <div class="wlist-item"><div class="wlist-name">${p}</div></div>
+      <div style="margin:20px 0;display:flex;gap:8px;">
+        <input class="form-input" id="newProductInput" placeholder="Yeni ürün türü" style="max-width:300px;">
+        <button class="btn btn-primary" onclick="addProductType()">Ekle</button>
+      </div>
+      <div class="widget"><div class="widget-body">${APP.data.productTypes.map((p,i)=>`
+        <div class="wlist-item">
+          <div class="wlist-name">${p}</div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-sm btn-secondary" onclick="editProductType(${i})">✏️</button>
+            ${APP.data.productTypes.length>1?`<button class="btn btn-sm btn-danger" onclick="removeProductType(${i})">🗑️</button>`:''}
+          </div>
+        </div>
       `).join('')}</div></div>
     `;
   }
@@ -5262,6 +5574,34 @@ function removeFacility(id) {
   toast('Tesis silindi');
 }
 
+function addProductType() {
+  const v = document.getElementById('newProductInput').value.trim();
+  if(!v) return;
+  if(!APP.data.productTypes.includes(v)) {
+    APP.data.productTypes.push(v);
+    saveData(); switchAdminTab('productsAdmin');
+    toast(v + ' eklendi');
+  } else toast('Bu ürün zaten var','error');
+}
+
+function editProductType(idx) {
+  const old = APP.data.productTypes[idx];
+  const newName = prompt('Ürün adını düzenleyin:', old);
+  if(newName && newName.trim() && newName.trim() !== old) {
+    APP.data.productTypes[idx] = newName.trim();
+    saveData(); switchAdminTab('productsAdmin');
+    toast('Ürün güncellendi');
+  }
+}
+
+function removeProductType(idx) {
+  if(APP.data.productTypes.length <= 1) { toast('En az 1 ürün türü olmalı','error'); return; }
+  if(!confirm(APP.data.productTypes[idx]+' ürününü silmek istiyor musunuz?')) return;
+  APP.data.productTypes.splice(idx, 1);
+  saveData(); switchAdminTab('productsAdmin');
+  toast('Ürün silindi');
+}
+
 // ============================================================
 // BACKUP / RESTORE SYSTEM
 // ============================================================
@@ -5384,8 +5724,11 @@ function saveBackupSettings() {
 }
 
 function resetAllData() {
-  if(!confirm('⚠️ TÜM VERİLER SİLİNECEK!\n\nBu işlem geri alınamaz.\nÖnce yedek aldığınızdan emin olun.\n\nDevam etmek istiyor musunuz?')) return;
-  if(!confirm('Son kez onaylayın: Tüm müşteriler, makbuzlar, ziyaretler silinecek.')) return;
+  // Generate random 6-digit code
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const entered = prompt('⚠️ TÜM VERİLER SİLİNECEK!\n\nBu işlem geri alınamaz.\nÖnce yedek aldığınızdan emin olun.\n\nDevam etmek için aşağıdaki kodu girin:\n\n👉 ' + code);
+  if(entered !== code) { toast('Kod yanlış — silme işlemi iptal edildi','info'); return; }
+  if(!confirm('SON KEZ: Tüm müşteriler, makbuzlar, ziyaretler silinecek. Onaylıyor musunuz?')) return;
 
   APP.data = {
     users:[], customers:[], visits:[], proposals:[], receipts:[], tediye:[],
