@@ -5284,19 +5284,26 @@ function switchAdminTab(tab) {
             <button class="btn btn-primary" onclick="importMigrationFile()">📤 İçe Aktar</button>
           </div>
           
-          <h4 style="font-size:13px;margin-bottom:8px;">Yöntem 3: Google Sheets'den Aktar</h4>
-          <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Eski CRM'in bağlı olduğu Google Sheets URL'sini girin:</p>
+          <h4 style="font-size:13px;margin-bottom:8px;">Yöntem 3: Google Sheets / CSV</h4>
+          <p style="font-size:12px;color:var(--text-secondary);margin-bottom:8px;">Published URL yapıştırın veya CSV dosyası yükleyin:</p>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <input class="form-input" id="sheetsUrl" placeholder="https://docs.google.com/spreadsheets/d/e/.../pubhtml" style="flex:1;">
+            <button class="btn btn-secondary" onclick="importFromSheets()">Çek</button>
+          </div>
           <div style="display:flex;gap:8px;margin-bottom:16px;">
-            <input class="form-input" id="sheetsUrl" placeholder="Google Sheets Published URL" style="flex:1;">
-            <button class="btn btn-secondary" onclick="importFromSheets()">İçe Aktar</button>
+            <input type="file" id="csvMigrationInput" accept=".csv,.txt" class="form-input" style="flex:1;">
+            <button class="btn btn-primary" onclick="importCSVFile()">CSV Yükle</button>
           </div>
 
           <div style="background:var(--bg);border-radius:var(--radius-sm);padding:12px;margin-top:8px;">
             <div style="font-size:12px;font-weight:600;margin-bottom:4px;">💡 İpuçları:</div>
-            <ul style="font-size:11px;color:var(--text-secondary);padding-left:16px;line-height:1.6;">
-              <li>Eski CRM'de Admin → Yedekleme → JSON İndir yaparak dosyayı buraya yükleyebilirsiniz</li>
-              <li>Otomatik algılama aynı tarayıcıda eski CRM açılmışsa çalışır</li>
-              <li>İçe aktarma mevcut verilere EKLENİR, silmez (tekrarlar varsa atlanır)</li>
+            <ul style="font-size:11px;color:var(--text-secondary);padding-left:16px;line-height:1.8;">
+              <li><strong>JSON:</strong> Eski CRM'de varsa yedek indirip buraya yükleyin</li>
+              <li><strong>Otomatik:</strong> Aynı tarayıcıda eski CRM açıldıysa "Eski Verileri Ara" deneyin</li>
+              <li><strong>Google Sheets:</strong> Sheets'i açın → Dosya → İndir → CSV olarak indirip yükleyin</li>
+              <li><strong>Published URL:</strong> Sheets → Dosya → Web'de Yayınla → linki yapıştırın</li>
+              <li>İçe aktarma mevcut verilere <strong>eklenir</strong>, var olanları silmez</li>
+              <li>Müşteriler isim bazlı tekrar kontrolü yapılır</li>
             </ul>
           </div>
         </div>
@@ -5776,52 +5783,177 @@ function importMigrationFile() {
 function importFromSheets() {
   const url = document.getElementById('sheetsUrl')?.value?.trim();
   if(!url) { toast('URL girin','error'); return; }
-  toast('Google Sheets içe aktarma deneniyor...','info');
-  // Try to fetch published JSON
-  const jsonUrl = url.includes('/pub') ? url.replace(/\/pub.*/, '/gviz/tq?tqx=out:json') : url;
-  fetch(jsonUrl)
-    .then(r => r.text())
-    .then(text => {
-      // Google Sheets returns JSONP-like format
-      try {
-        const jsonStr = text.match(/google\.visualization\.Query\.setResponse\(([\s\S]+)\)/)?.[1];
-        if(jsonStr) {
-          const data = JSON.parse(jsonStr);
-          toast('Google Sheets verisi alındı, işleniyor...','info');
-          processGoogleSheetsData(data);
-        } else {
-          toast('Google Sheets formatı tanınamadı. URL doğru mu?','error');
-        }
-      } catch(e) { toast('Sheets verisi işlenemedi: '+e.message,'error'); }
+  
+  // Convert pubhtml URL to CSV export URL
+  const baseUrl = url.replace(/\/pubhtml.*/, '').replace(/\/pub\?.*/, '').replace(/\/pub$/, '');
+  const csvUrl = baseUrl + '/pub?output=csv&single=true';
+  
+  toast('Google Sheets CSV olarak çekiliyor...','info');
+  
+  fetch(csvUrl)
+    .then(r => {
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
     })
-    .catch(e => { toast('Bağlantı hatası: '+e.message,'error'); });
+    .then(csvText => {
+      if(!csvText || csvText.length < 10) throw new Error('Boş veri');
+      processCSVImport(csvText, 'Google Sheets');
+    })
+    .catch(e => {
+      console.warn('Sheets fetch error:', e);
+      toast('Otomatik çekme başarısız. Aşağıdaki adımları izleyin:', 'error');
+      showManualSheetInstructions();
+    });
+}
+
+function showManualSheetInstructions() {
+  const logEl = document.getElementById('migrationLog');
+  if(logEl) {
+    logEl.innerHTML = `
+      <div class="widget">
+        <div class="widget-header"><div class="widget-title" style="color:var(--warning);">⚠️ Manuel İndirme Gerekli</div></div>
+        <div class="widget-body">
+          <p style="font-size:13px;margin-bottom:12px;">Google Sheets'den otomatik çekme başarısız oldu. Aşağıdaki adımlarla manuel yapabilirsiniz:</p>
+          <ol style="font-size:12px;line-height:1.8;padding-left:20px;color:var(--text-secondary);">
+            <li>Google Sheets'i açın</li>
+            <li><strong>Dosya → İndir → Virgülle ayrılmış değerler (.csv)</strong> seçin</li>
+            <li>İndirilen CSV dosyasını aşağıdan yükleyin</li>
+          </ol>
+          <div style="margin-top:12px;display:flex;gap:8px;">
+            <input type="file" id="csvMigrationInput" accept=".csv,.txt" class="form-input" style="flex:1;">
+            <button class="btn btn-primary" onclick="importCSVFile()">CSV Yükle</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+}
+
+function importCSVFile() {
+  const file = document.getElementById('csvMigrationInput')?.files[0];
+  if(!file) { toast('Dosya seçin','error'); return; }
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    processCSVImport(e.target.result, file.name);
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function processCSVImport(csvText, source) {
+  // Parse CSV
+  const lines = csvText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  if(lines.length < 2) { toast('CSV\'de yeterli veri yok','error'); return; }
+  
+  // Parse header row
+  const headers = parseCSVRow(lines[0]).map(h => h.toLowerCase().trim());
+  
+  // Detect column indices
+  const colMap = {
+    name: headers.findIndex(h => h.includes('işletme') || h.includes('isletme') || h.includes('müşteri') || h.includes('musteri') || h.includes('name') || h.includes('ad') || h === 'isim'),
+    city: headers.findIndex(h => h.includes('il') || h.includes('şehir') || h.includes('sehir') || h === 'city'),
+    district: headers.findIndex(h => h.includes('ilçe') || h.includes('ilce') || h === 'district'),
+    contact: headers.findIndex(h => h.includes('yetkili') || h.includes('kişi') || h.includes('kisi') || h.includes('contact')),
+    phone: headers.findIndex(h => h.includes('telefon') || h.includes('tel') || h.includes('phone') || h.includes('gsm')),
+    type: headers.findIndex(h => h.includes('tip') || h.includes('tür') || h.includes('type')),
+    period: headers.findIndex(h => h.includes('periyot') || h.includes('period') || h.includes('gün') || h.includes('gun')),
+    price: headers.findIndex(h => h.includes('fiyat') || h.includes('price') || h.includes('nakit')),
+    priceYakit: headers.findIndex(h => h.includes('yakıt') || h.includes('yakit') || h.includes('y.kartı')),
+    priceFatura: headers.findIndex(h => h.includes('fatura') || h.includes('faturalı')),
+    barrels: headers.findIndex(h => h.includes('varil') || h.includes('barrel')),
+    address: headers.findIndex(h => h.includes('adres') || h.includes('address')),
+    fuelCard: headers.findIndex(h => h.includes('kart') || h.includes('fuel')),
+  };
+  
+  if(colMap.name < 0) {
+    // Try first column as name
+    colMap.name = 0;
+  }
+  
+  let imported = 0, skipped = 0;
+  
+  for(let i = 1; i < lines.length; i++) {
+    const vals = parseCSVRow(lines[i]);
+    const name = (vals[colMap.name] || '').trim();
+    if(!name || name.length < 2) continue;
+    
+    // Check duplicate
+    if(APP.data.customers.find(c => c.name.toLowerCase() === name.toLowerCase())) {
+      skipped++;
+      continue;
+    }
+    
+    const typeVal = colMap.type >= 0 ? (vals[colMap.type]||'').toLowerCase() : '';
+    const isPeriodic = !typeVal.includes('talep') && !typeVal.includes('demand');
+    
+    APP.data.customers.push({
+      id: uid(),
+      name,
+      city: colMap.city >= 0 ? (vals[colMap.city]||'').trim() : '',
+      district: colMap.district >= 0 ? (vals[colMap.district]||'').trim() : '',
+      contact: colMap.contact >= 0 ? (vals[colMap.contact]||'').trim() : '',
+      phone: colMap.phone >= 0 ? (vals[colMap.phone]||'').trim() : '',
+      type: isPeriodic ? 'periodic' : 'onDemand',
+      period: colMap.period >= 0 ? (parseInt(vals[colMap.period])||30) : 30,
+      priceNakit: colMap.price >= 0 ? (parseFloat(vals[colMap.price])||0) : 0,
+      price: colMap.price >= 0 ? (parseFloat(vals[colMap.price])||0) : 0,
+      priceYakit: colMap.priceYakit >= 0 ? (parseFloat(vals[colMap.priceYakit])||0) : 0,
+      priceFatura: colMap.priceFatura >= 0 ? (parseFloat(vals[colMap.priceFatura])||0) : 0,
+      barrels: colMap.barrels >= 0 ? (parseInt(vals[colMap.barrels])||0) : 0,
+      address: colMap.address >= 0 ? (vals[colMap.address]||'').trim() : '',
+      fuelCardNo: colMap.fuelCard >= 0 ? (vals[colMap.fuelCard]||'').trim() : '',
+      paymentPersons: [],
+      createdAt: today()
+    });
+    imported++;
+  }
+  
+  saveData(); populateCityFilters();
+  
+  const logEl = document.getElementById('migrationLog');
+  if(logEl) {
+    logEl.innerHTML = `
+      <div class="widget">
+        <div class="widget-header"><div class="widget-title" style="color:var(--success);">✅ CSV Aktarma Tamamlandı</div></div>
+        <div class="widget-body">
+          <div style="font-size:13px;">Kaynak: <strong>${source}</strong></div>
+          <div style="font-size:13px;margin-top:4px;">✅ Aktarılan: <strong>${imported} müşteri</strong></div>
+          ${skipped>0?`<div style="font-size:13px;margin-top:4px;">⏭️ Atlanan (zaten mevcut): <strong>${skipped}</strong></div>`:''}
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:8px;">
+            Algılanan sütunlar: ${Object.entries(colMap).filter(([k,v])=>v>=0).map(([k,v])=>k+'('+headers[v]+')').join(', ')}
+          </div>
+          <div style="font-size:13px;margin-top:8px;">Toplam müşteri: <strong>${APP.data.customers.length}</strong></div>
+        </div>
+      </div>
+    `;
+  }
+  toast(`✅ ${imported} müşteri aktarıldı` + (skipped>0?`, ${skipped} atlanan`:''));
+}
+
+function parseCSVRow(line) {
+  const result = [];
+  let current = '';
+  let inQuotes = false;
+  for(let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if(ch === '"') { inQuotes = !inQuotes; }
+    else if(ch === ',' && !inQuotes) { result.push(current); current = ''; }
+    else { current += ch; }
+  }
+  result.push(current);
+  return result;
 }
 
 function processGoogleSheetsData(sheetsData) {
-  // Process Google Sheets visualization data format
+  // Legacy function - kept for compatibility
   try {
     const table = sheetsData.table;
     const cols = table.cols.map(c => c.label?.toLowerCase()||'');
     const rows = table.rows;
-    let imported = 0;
-    rows.forEach(row => {
-      const vals = row.c.map(c => c?.v || '');
-      const nameIdx = cols.findIndex(c => c.includes('işletme') || c.includes('isletme') || c.includes('ad') || c.includes('name'));
-      if(nameIdx >= 0 && vals[nameIdx]) {
-        const name = String(vals[nameIdx]).trim();
-        if(!APP.data.customers.find(c => c.name.toLowerCase() === name.toLowerCase())) {
-          const cityIdx = cols.findIndex(c => c.includes('il') || c.includes('city'));
-          const phoneIdx = cols.findIndex(c => c.includes('telefon') || c.includes('phone'));
-          APP.data.customers.push({
-            id: uid(), name, city: vals[cityIdx]||'', phone: vals[phoneIdx]||'',
-            type: 'periodic', period: 30, createdAt: today()
-          });
-          imported++;
-        }
-      }
-    });
-    saveData(); populateCityFilters();
-    toast(`✅ Google Sheets: ${imported} müşteri aktarıldı`);
+    // Convert to CSV format and process
+    const header = cols.join(',');
+    const dataRows = rows.map(row => row.c.map(c => '"'+(c?.v||'')+'"').join(','));
+    const csvText = header + '\n' + dataRows.join('\n');
+    processCSVImport(csvText, 'Google Sheets API');
   } catch(e) { toast('Sheets verisi işlenemedi','error'); }
 }
 
