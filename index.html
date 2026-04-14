@@ -6,8 +6,13 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#1B2A4A">
+<meta name="apple-mobile-web-app-title" content="Ekosa CRM">
+<meta name="application-name" content="Ekosa CRM">
+<meta name="msapplication-TileColor" content="#1B2A4A">
 <title>Ekosa CRM v5</title>
-<link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiRWtvc2EgQ1JNIiwic2hvcnRfbmFtZSI6IkVrb3NhIiwic3RhcnRfdXJsIjoiLiIsImRpc3BsYXkiOiJzdGFuZGFsb25lIiwidGhlbWVfY29sb3IiOiIjMUIyQTRBIiwiYmFja2dyb3VuZF9jb2xvciI6IiMxQjJBNEEifQ==">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <style>
 :root {
   --primary: #1B2A4A;
@@ -3971,6 +3976,12 @@ document.getElementById('loginPass')?.addEventListener('keydown', e => {
 // INIT
 // ============================================================
 window.addEventListener('DOMContentLoaded', () => {
+  // Register Service Worker for PWA
+  if('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      console.log('SW registered:', reg.scope);
+    }).catch(err => console.warn('SW error:', err));
+  }
   // Set default date inputs
   document.getElementById('dayReportDate').value = today();
   checkAuth();
