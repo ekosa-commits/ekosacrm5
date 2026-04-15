@@ -642,7 +642,7 @@ input, select, textarea, button { font-family: var(--font); }
           <h1 class="page-title" id="pageTitle">Ana Sayfa</h1>
         </div>
         <div class="top-bar-right">
-          <div class="sync-status">
+          <div class="sync-status" style="cursor:pointer;" onclick="manualSync()" title="Tıkla: Firebase ile senkronize et">
             <div class="sync-dot" id="syncDot"></div>
             <span id="syncText">Çevrimiçi</span>
           </div>
@@ -1566,9 +1566,7 @@ function generateTeslimFisiPDF(receiptId) {
   ${pdfAltBilgi()}
   </body></html>`;
 
-  const w = window.open('','_blank');
-  w.document.write(html); w.document.close();
-  setTimeout(()=>w.print(), 500);
+  openPrintWindow(html);
 }
 
 function generateHesapEkstresiPDF(customerId) {
@@ -1639,9 +1637,7 @@ function generateHesapEkstresiPDF(customerId) {
   ${pdfAltBilgi()}
   </body></html>`;
 
-  const w = window.open('','_blank');
-  w.document.write(html); w.document.close();
-  setTimeout(()=>w.print(), 500);
+  openPrintWindow(html);
 }
 
 function toast(msg, type='success') {
@@ -1651,6 +1647,26 @@ function toast(msg, type='success') {
   t.textContent = msg;
   c.appendChild(t);
   setTimeout(() => t.remove(), 3500);
+}
+
+function openPrintWindow(html) {
+  // Use Blob URL instead of document.write to avoid DOCTYPE rendering issues on mobile
+  try {
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const w = window.open(url, '_blank');
+    if(w) {
+      w.onload = () => { setTimeout(() => w.print(), 400); };
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } else {
+      URL.revokeObjectURL(url);
+      toast('Popup engelleyici kapatın veya izin verin', 'error');
+    }
+  } catch(e) {
+    // Fallback for older browsers
+    const w = window.open('','_blank');
+    if(w) { w.document.write(html); w.document.close(); setTimeout(()=>w.print(),400); }
+  }
 }
 
 function daysBetween(d1, d2) {
@@ -1685,17 +1701,13 @@ function getRemainingText(days) {
 // DATA PERSISTENCE (Firestore or localStorage fallback)
 // ============================================================
 let _syncTimer = null;
-let _dirtyCollections = new Set();
 
-function saveData(changedCol) {
+function saveData() {
   localStorage.setItem('ekosa_crm_v14', JSON.stringify(APP.data));
-  // If Firebase is ready, debounce sync
+  // Debounce Firebase sync (wait 800ms after last save)
   if(isFirebaseReady && APP.currentUser) {
-    if(changedCol) _dirtyCollections.add(changedCol);
-    else _dirtyCollections = new Set(['customers','visits','proposals','receipts','tediye','vehicles',
-      'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions']);
     clearTimeout(_syncTimer);
-    _syncTimer = setTimeout(() => syncToFirestore(), 1500);
+    _syncTimer = setTimeout(() => syncToFirestore(), 800);
   }
 }
 
@@ -1720,35 +1732,25 @@ function loadData() {
 async function syncToFirestore() {
   if(!isFirebaseReady) return;
   try {
-    const collections = _dirtyCollections.size > 0 ? [..._dirtyCollections] :
-      ['customers','visits','proposals','receipts','tediye','vehicles',
+    const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
       'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions'];
-    _dirtyCollections.clear();
-
     for(const col of collections) {
-      if(APP.data[col] && Array.isArray(APP.data[col])) {
-        // Get current Firebase docs for this collection
-        const snap = await db.collection(col).get();
-        const fbIds = new Set(snap.docs.map(d=>d.id));
-        const localIds = new Set(APP.data[col].filter(item=>item&&item.id).map(item=>item.id));
-
-        // Upsert local items
-        for(const item of APP.data[col]) {
-          if(!item || typeof item !== 'object' || !item.id) continue;
-          try {
-            await db.collection(col).doc(item.id).set(item, {merge:true});
-          } catch(e) { console.warn('Sync item error:', col, item.id, e); }
-        }
+      if(!APP.data[col] || !Array.isArray(APP.data[col])) continue;
+      for(const item of APP.data[col]) {
+        if(!item || typeof item !== 'object' || !item.id) continue;
+        try {
+          await db.collection(col).doc(item.id).set(item);
+        } catch(e) { console.warn('Sync error:', col, item.id, e); }
       }
     }
-    // Save counters, cities, and simple values
+    // Save settings
     await db.collection('settings').doc('app').set({
-      receiptCounter: APP.data.receiptCounter,
-      tediyeCounter: APP.data.tediyeCounter,
-      productTypes: APP.data.productTypes,
-      cities: APP.data.cities,
+      receiptCounter: APP.data.receiptCounter || 0,
+      tediyeCounter: APP.data.tediyeCounter || 0,
+      productTypes: APP.data.productTypes || [],
+      cities: APP.data.cities || [],
     }, {merge:true});
-    console.log('🔄 Sync OK:', collections.join(', '));
+    console.log('🔄 Firebase sync tamamlandı');
   } catch(e) {
     console.warn('Sync error:', e);
   }
@@ -1828,7 +1830,8 @@ function startListeners() {
     'urgentRequests','notes','licenses','depotExits','depotEntries','cariTransactions','depots','facilities'];
   collections.forEach(col => {
     db.collection(col).onSnapshot(snap => {
-      if(snap.empty && APP.data[col]?.length > 0) return; // Don't overwrite local with empty
+      if(APP._isPushing) return; // Don't update during clearAndPush
+      // Accept the snapshot (even if empty — a deletion might have cleared it)
       APP.data[col] = snap.docs.map(d => ({id:d.id, ...d.data()}));
       localStorage.setItem('ekosa_crm_v14', JSON.stringify(APP.data));
       if(APP.currentPage === 'fieldOps' && typeof foState !== 'undefined' && foState.selectedCustomer) return;
@@ -1839,6 +1842,7 @@ function startListeners() {
 
 async function clearAndPushToFirestore() {
   if(!isFirebaseReady) return;
+  APP._isPushing = true;
   toast('🔄 Firebase verileri güncelleniyor...', 'info');
   try {
     const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
@@ -1875,6 +1879,7 @@ async function clearAndPushToFirestore() {
     console.warn('Firebase clear/push error:', e);
     toast('Firebase güncelleme hatası, çevrimdışı çalışmaya devam', 'error');
   }
+  APP._isPushing = false;
 }
 
 // ============================================================
@@ -2096,12 +2101,47 @@ function toggleMoreMenu() {
 function updateSyncStatus() {
   const dot = document.getElementById('syncDot');
   const text = document.getElementById('syncText');
-  if(navigator.onLine) {
+  if(navigator.onLine && isFirebaseReady) {
+    dot.classList.remove('offline');
+    text.textContent = 'Çevrimiçi ↻';
+  } else if(navigator.onLine) {
     dot.classList.remove('offline');
     text.textContent = 'Çevrimiçi';
   } else {
     dot.classList.add('offline');
     text.textContent = 'Çevrimdışı';
+  }
+}
+
+async function manualSync() {
+  if(!isFirebaseReady || !APP.currentUser) {
+    toast('Firebase bağlantısı yok', 'error');
+    return;
+  }
+  const text = document.getElementById('syncText');
+  text.textContent = '🔄 Senkronize...';
+  try {
+    // 1. Pull latest from Firebase
+    await loadFromFirestore();
+    // 2. Push local changes to Firebase  
+    const allCols = ['customers','visits','proposals','receipts','tediye','vehicles',
+      'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions'];
+    for(const col of allCols) {
+      if(!_dirtyItems[col]) _dirtyItems[col] = new Set();
+      (APP.data[col]||[]).forEach(item => { if(item?.id) _dirtyItems[col].add(item.id); });
+    }
+    await syncToFirestore();
+    // 3. Refresh UI
+    populateCityFilters();
+    refreshCurrentPage();
+    text.textContent = '✅ Senkronize';
+    toast('✅ Firebase senkronizasyonu tamamlandı — ' + APP.data.customers.length + ' müşteri');
+    setTimeout(() => updateSyncStatus(), 3000);
+  } catch(e) {
+    console.error('Manual sync error:', e);
+    text.textContent = '❌ Hata';
+    toast('Senkronizasyon hatası: ' + e.message, 'error');
+    setTimeout(() => updateSyncStatus(), 3000);
   }
 }
 window.addEventListener('online', updateSyncStatus);
@@ -4022,13 +4062,25 @@ function generateTediyeHTML(id, size) {
 }
 
 function openRawBTPrint(html) {
+  // Extract plain text from HTML for thermal printers
+  let plainText = '';
+  const preMatch = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
+  if(preMatch) {
+    plainText = preMatch[1];
+  } else {
+    // Fallback: strip all HTML tags
+    plainText = html.replace(/<[^>]*>/g, '');
+  }
+  
   try {
-    const encoded = btoa(unescape(encodeURIComponent(html)));
+    // RawBT: send PLAIN TEXT only (not HTML with DOCTYPE)
+    const encoded = btoa(unescape(encodeURIComponent(plainText)));
     window.location.href = 'rawbt:base64,' + encoded;
     return;
   } catch(e) { console.warn('RawBT error:', e); }
-  const w = window.open('','_blank','width=300,height=500');
-  if(w) { w.document.write(html); w.document.close(); setTimeout(()=>w.print(),300); }
+  
+  // Fallback: popup window with full HTML for screen/PDF print
+  openPrintWindow(html);
 }
 
 function printReceiptRawBT(id) {
@@ -5311,9 +5363,7 @@ function exportReport(format) {
     </table>
     ${pdfAltBilgi()}
     </body></html>`;
-    const w = window.open('','_blank');
-    w.document.write(html); w.document.close();
-    setTimeout(()=>w.print(), 500);
+    openPrintWindow(html);
   }
 }
 
@@ -5362,9 +5412,7 @@ function exportTediye(format) {
     </table>
     ${pdfAltBilgi()}
     </body></html>`;
-    const w = window.open('','_blank');
-    w.document.write(html); w.document.close();
-    setTimeout(()=>w.print(), 500);
+    openPrintWindow(html);
   }
 }
 
