@@ -2123,13 +2123,7 @@ async function manualSync() {
   try {
     // 1. Pull latest from Firebase
     await loadFromFirestore();
-    // 2. Push local changes to Firebase  
-    const allCols = ['customers','visits','proposals','receipts','tediye','vehicles',
-      'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions'];
-    for(const col of allCols) {
-      if(!_dirtyItems[col]) _dirtyItems[col] = new Set();
-      (APP.data[col]||[]).forEach(item => { if(item?.id) _dirtyItems[col].add(item.id); });
-    }
+    // 2. Push all local data to Firebase  
     await syncToFirestore();
     // 3. Refresh UI
     populateCityFilters();
