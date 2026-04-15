@@ -1678,7 +1678,7 @@ function getRemainingText(days) {
 // DATA PERSISTENCE (Firestore or localStorage fallback)
 // ============================================================
 function saveData() {
-  localStorage.setItem('ekosa_crm_v8', JSON.stringify(APP.data));
+  localStorage.setItem('ekosa_crm_v9', JSON.stringify(APP.data));
   // If Firebase is ready, also sync to Firestore
   if(isFirebaseReady && APP.currentUser) {
     syncToFirestore();
@@ -1686,7 +1686,7 @@ function saveData() {
 }
 
 function loadData() {
-  const saved = localStorage.getItem('ekosa_crm_v8');
+  const saved = localStorage.getItem('ekosa_crm_v9');
   if(saved) {
     const parsed = JSON.parse(saved);
     Object.keys(parsed).forEach(k => {
@@ -1698,6 +1698,7 @@ function loadData() {
       if(APP.data.hasOwnProperty(k)) APP.data[k] = IMPORT_DATA[k];
     });
     saveData();
+    APP._freshImport = true;
     console.log('✅ Import data loaded: ' + IMPORT_DATA.customers.length + ' customers');
   }
 }
@@ -1779,15 +1780,71 @@ async function loadFromFirestore() {
 // Setup real-time listeners
 function setupRealtimeListeners() {
   if(!isFirebaseReady) return;
+
+  // If fresh import, clear Firebase first, push clean data, then listen
+  if(APP._freshImport) {
+    APP._freshImport = false;
+    clearAndPushToFirestore().then(() => {
+      startListeners();
+    });
+    return;
+  }
+  startListeners();
+}
+
+function startListeners() {
+  if(!isFirebaseReady) return;
   const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
     'urgentRequests','notes','licenses','depotExits','depotEntries','cariTransactions','depots','facilities'];
   collections.forEach(col => {
     db.collection(col).onSnapshot(snap => {
+      if(snap.empty && APP.data[col]?.length > 0) return; // Don't overwrite local with empty
       APP.data[col] = snap.docs.map(d => ({id:d.id, ...d.data()}));
-      localStorage.setItem('ekosa_crm_v8', JSON.stringify(APP.data));
+      localStorage.setItem('ekosa_crm_v9', JSON.stringify(APP.data));
+      if(APP.currentPage === 'fieldOps' && typeof foState !== 'undefined' && foState.selectedCustomer) return;
       refreshCurrentPage();
     }, err => console.warn('Listener error:', col, err));
   });
+}
+
+async function clearAndPushToFirestore() {
+  if(!isFirebaseReady) return;
+  toast('🔄 Firebase verileri güncelleniyor...', 'info');
+  try {
+    const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
+      'urgentRequests','notes','licenses','depotExits','depotEntries','cariTransactions','depots','facilities'];
+    
+    // 1. Delete all old docs
+    for(const col of collections) {
+      const snap = await db.collection(col).get();
+      const batch = db.batch();
+      snap.docs.forEach(doc => batch.delete(doc.ref));
+      if(!snap.empty) await batch.commit();
+    }
+    
+    // 2. Push clean data
+    for(const col of collections) {
+      if(APP.data[col] && Array.isArray(APP.data[col])) {
+        for(const item of APP.data[col]) {
+          if(!item || typeof item !== 'object' || !item.id) continue;
+          try { await db.collection(col).doc(item.id).set(item); } catch(e) {}
+        }
+      }
+    }
+    
+    // 3. Save settings
+    await db.collection('settings').doc('app').set({
+      receiptCounter: APP.data.receiptCounter,
+      tediyeCounter: APP.data.tediyeCounter,
+      productTypes: APP.data.productTypes,
+      cities: APP.data.cities,
+    });
+    
+    toast('✅ Firebase güncellendi — ' + APP.data.customers.length + ' müşteri');
+  } catch(e) {
+    console.warn('Firebase clear/push error:', e);
+    toast('Firebase güncelleme hatası, çevrimdışı çalışmaya devam', 'error');
+  }
 }
 
 // ============================================================
