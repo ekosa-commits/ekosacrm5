@@ -1678,7 +1678,7 @@ function getRemainingText(days) {
 // DATA PERSISTENCE (Firestore or localStorage fallback)
 // ============================================================
 function saveData() {
-  localStorage.setItem('ekosa_crm_v5', JSON.stringify(APP.data));
+  localStorage.setItem('ekosa_crm_v6', JSON.stringify(APP.data));
   // If Firebase is ready, also sync to Firestore
   if(isFirebaseReady && APP.currentUser) {
     syncToFirestore();
@@ -1686,7 +1686,7 @@ function saveData() {
 }
 
 function loadData() {
-  const saved = localStorage.getItem('ekosa_crm_v5');
+  const saved = localStorage.getItem('ekosa_crm_v6');
   if(saved) {
     const parsed = JSON.parse(saved);
     Object.keys(parsed).forEach(k => {
@@ -1784,7 +1784,7 @@ function setupRealtimeListeners() {
   collections.forEach(col => {
     db.collection(col).onSnapshot(snap => {
       APP.data[col] = snap.docs.map(d => ({id:d.id, ...d.data()}));
-      localStorage.setItem('ekosa_crm_v5', JSON.stringify(APP.data));
+      localStorage.setItem('ekosa_crm_v6', JSON.stringify(APP.data));
       refreshCurrentPage();
     }, err => console.warn('Listener error:', col, err));
   });
