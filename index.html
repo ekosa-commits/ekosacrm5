@@ -1684,11 +1684,18 @@ function getRemainingText(days) {
 // ============================================================
 // DATA PERSISTENCE (Firestore or localStorage fallback)
 // ============================================================
-function saveData() {
+let _syncTimer = null;
+let _dirtyCollections = new Set();
+
+function saveData(changedCol) {
   localStorage.setItem('ekosa_crm_v14', JSON.stringify(APP.data));
-  // If Firebase is ready, also sync to Firestore
+  // If Firebase is ready, debounce sync
   if(isFirebaseReady && APP.currentUser) {
-    syncToFirestore();
+    if(changedCol) _dirtyCollections.add(changedCol);
+    else _dirtyCollections = new Set(['customers','visits','proposals','receipts','tediye','vehicles',
+      'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions']);
+    clearTimeout(_syncTimer);
+    _syncTimer = setTimeout(() => syncToFirestore(), 1500);
   }
 }
 
@@ -1713,10 +1720,19 @@ function loadData() {
 async function syncToFirestore() {
   if(!isFirebaseReady) return;
   try {
-    const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
+    const collections = _dirtyCollections.size > 0 ? [..._dirtyCollections] :
+      ['customers','visits','proposals','receipts','tediye','vehicles',
       'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions'];
+    _dirtyCollections.clear();
+
     for(const col of collections) {
       if(APP.data[col] && Array.isArray(APP.data[col])) {
+        // Get current Firebase docs for this collection
+        const snap = await db.collection(col).get();
+        const fbIds = new Set(snap.docs.map(d=>d.id));
+        const localIds = new Set(APP.data[col].filter(item=>item&&item.id).map(item=>item.id));
+
+        // Upsert local items
         for(const item of APP.data[col]) {
           if(!item || typeof item !== 'object' || !item.id) continue;
           try {
@@ -1732,6 +1748,7 @@ async function syncToFirestore() {
       productTypes: APP.data.productTypes,
       cities: APP.data.cities,
     }, {merge:true});
+    console.log('🔄 Sync OK:', collections.join(', '));
   } catch(e) {
     console.warn('Sync error:', e);
   }
@@ -1764,10 +1781,12 @@ async function loadFromFirestore() {
   try {
     const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
       'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions'];
+    let hasAnyData = false;
     for(const col of collections) {
       const snap = await db.collection(col).get();
       if(!snap.empty) {
         APP.data[col] = snap.docs.map(d => ({id:d.id, ...d.data()}));
+        hasAnyData = true;
       }
     }
     const settings = await db.collection('settings').doc('app').get();
@@ -1778,7 +1797,11 @@ async function loadFromFirestore() {
       if(s.productTypes) APP.data.productTypes = s.productTypes;
       if(s.cities) APP.data.cities = s.cities;
     }
-    saveData(); // Update local cache
+    if(hasAnyData) {
+      APP._freshImport = false; // Firebase has data, no need for import
+      localStorage.setItem('ekosa_crm_v14', JSON.stringify(APP.data));
+      console.log('✅ Firebase → Local sync: ' + APP.data.customers.length + ' müşteri');
+    }
   } catch(e) {
     console.warn('Load from Firestore error:', e);
   }
@@ -1937,7 +1960,7 @@ function showApp() {
     el.style.display = APP.currentUser.role === 'admin' ? '' : 'none';
   });
 
-  loadData();
+  loadData(); // Load from localStorage first (for immediate display)
   // Load saved user extensions
   try {
     const savedUsers = JSON.parse(localStorage.getItem('ekosa_users_ext')||'{}');
@@ -1947,9 +1970,36 @@ function showApp() {
   applyTheme();
   populateCityFilters();
   navigateTo('dashboard');
-  setupRealtimeListeners();
-  updateSyncStatus();
 
+  // CRITICAL: Always try Firebase first for latest data
+  if(isFirebaseReady) {
+    loadFromFirestore().then(() => {
+      console.log('✅ Firebase verileri yüklendi');
+      populateCityFilters();
+      refreshCurrentPage();
+      // If this was a fresh import AND Firebase was empty, push IMPORT_DATA
+      if(APP._freshImport && APP.data.customers.length > 0) {
+        // Check if Firebase already has data (don't overwrite)
+        db.collection('customers').limit(1).get().then(snap => {
+          if(snap.empty) {
+            console.log('Firebase boş — IMPORT_DATA yükleniyor...');
+            clearAndPushToFirestore().then(() => startListeners());
+          } else {
+            console.log('Firebase dolu — IMPORT_DATA atlanıyor');
+            APP._freshImport = false;
+            startListeners();
+          }
+        }).catch(() => startListeners());
+      } else {
+        startListeners();
+      }
+    }).catch(e => {
+      console.warn('Firebase load failed, using local:', e);
+      setupRealtimeListeners();
+    });
+  }
+
+  updateSyncStatus();
   // Backup system
   checkBackupReminder();
   scheduleAutoBackup();
