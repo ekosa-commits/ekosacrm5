@@ -1013,7 +1013,7 @@ input, select, textarea, button { font-family: var(--font); }
           <div class="widget">
             <div class="data-table-wrap">
               <table class="data-table">
-                <thead><tr><th>Tarih</th><th>İşletme</th><th>İl</th><th>Teklif Fiyat</th><th>Takip</th><th>Takip Tarihi</th><th>Durum</th><th>Not</th><th>İşlem</th></tr></thead>
+                <thead><tr><th>Tarih</th><th>İşletme</th><th>Nakit</th><th>Y.Kartı</th><th>Faturalı</th><th>Aşama</th><th>Rakip</th><th>Takip</th><th>Not</th><th>İşlem</th></tr></thead>
                 <tbody id="proposalsBody"></tbody>
               </table>
             </div>
@@ -1678,7 +1678,7 @@ function getRemainingText(days) {
 // DATA PERSISTENCE (Firestore or localStorage fallback)
 // ============================================================
 function saveData() {
-  localStorage.setItem('ekosa_crm_v6', JSON.stringify(APP.data));
+  localStorage.setItem('ekosa_crm_v7', JSON.stringify(APP.data));
   // If Firebase is ready, also sync to Firestore
   if(isFirebaseReady && APP.currentUser) {
     syncToFirestore();
@@ -1686,7 +1686,7 @@ function saveData() {
 }
 
 function loadData() {
-  const saved = localStorage.getItem('ekosa_crm_v6');
+  const saved = localStorage.getItem('ekosa_crm_v7');
   if(saved) {
     const parsed = JSON.parse(saved);
     Object.keys(parsed).forEach(k => {
@@ -1784,7 +1784,7 @@ function setupRealtimeListeners() {
   collections.forEach(col => {
     db.collection(col).onSnapshot(snap => {
       APP.data[col] = snap.docs.map(d => ({id:d.id, ...d.data()}));
-      localStorage.setItem('ekosa_crm_v6', JSON.stringify(APP.data));
+      localStorage.setItem('ekosa_crm_v7', JSON.stringify(APP.data));
       refreshCurrentPage();
     }, err => console.warn('Listener error:', col, err));
   });
@@ -3261,12 +3261,7 @@ function renderProposals() {
   const dateFrom = document.getElementById('proposalDateFrom')?.value || '';
   const dateTo = document.getElementById('proposalDateTo')?.value || '';
 
-  if(cityF) {
-    proposals = proposals.filter(p => {
-      const cust = APP.data.customers.find(c=>c.id===p.customerId);
-      return cust?.city === cityF;
-    });
-  }
+  if(cityF) proposals = proposals.filter(p => p.city === cityF);
   if(statusF) proposals = proposals.filter(p => p.status === statusF);
   if(followF === 'yes') proposals = proposals.filter(p => p.followUp);
   else if(followF === 'no') proposals = proposals.filter(p => !p.followUp);
@@ -3275,21 +3270,20 @@ function renderProposals() {
   if(dateTo) proposals = proposals.filter(p => p.date <= dateTo);
 
   tbody.innerHTML = proposals.map(p => {
-    const cust = APP.data.customers.find(c=>c.id===p.customerId);
-    const city = cust?.city || '';
     const isOverdue = p.followUp && p.followUpDate && p.followUpDate < today();
     return `<tr>
     <td>${formatDate(p.date)}</td>
-    <td>${p.businessName}</td>
-    <td>${city||'-'}</td>
-    <td>${formatMoney(p.price)}/kg</td>
-    <td>${p.followUp ? '✅ Evet' : '-'}</td>
-    <td>${p.followUpDate ? formatDate(p.followUpDate) : '-'} ${isOverdue?'<span class="wlist-tag tag-red" style="font-size:10px;">Gecikmiş</span>':''}</td>
-    <td><span class="status ${p.status==='accepted'?'status-done':p.status==='rejected'?'status-cancelled':'status-pending'}">${p.status==='accepted'?'Kabul':p.status==='rejected'?'Reddedildi':'Bekliyor'}</span></td>
-    <td>${p.note||'-'}</td>
-    <td>
-      <button class="btn btn-sm btn-secondary" onclick="openProposalModal('${p.id}')">Düzenle</button>
-      <button class="btn btn-sm btn-danger" onclick="deleteProposal('${p.id}')">Sil</button>
+    <td><strong>${p.businessName}</strong><div style="font-size:10px;color:var(--text-light);">${p.city||''}</div></td>
+    <td>${p.priceNakit?formatMoney(p.priceNakit):'-'}</td>
+    <td>${p.priceYakit?formatMoney(p.priceYakit):'-'}</td>
+    <td>${p.priceFatura?formatMoney(p.priceFatura):'-'}</td>
+    <td>${p.stage||p.status||'-'}</td>
+    <td>${p.rivalCompany?p.rivalCompany+(p.rivalPrice?' '+formatMoney(p.rivalPrice):''):'-'}</td>
+    <td>${p.followUpDate ? formatDate(p.followUpDate) : '-'} ${isOverdue?'<span class="wlist-tag tag-red" style="font-size:10px;">!</span>':''}</td>
+    <td style="font-size:11px;">${p.note||'-'}</td>
+    <td style="white-space:nowrap;">
+      <button class="btn btn-sm btn-secondary" onclick="openProposalModal('${p.id}')">✏️</button>
+      <button class="btn btn-sm btn-danger" onclick="deleteProposal('${p.id}')">🗑️</button>
     </td>
   </tr>`;
   }).join('');
@@ -3305,9 +3299,27 @@ function openProposalModal(id) {
       </select>
     </div>
     <div class="form-group"><label class="form-label">veya Yeni İşletme Adı</label><input class="form-input" id="mPropNewBiz" value="${p?.customerId?'':p?.businessName||''}"></div>
+    <div class="form-group"><label class="form-label">İl</label><input class="form-input" id="mPropCity" value="${p?.city||''}"></div>
+    <div style="font-size:12px;font-weight:600;margin:12px 0 6px;color:var(--text-secondary);">Teklif Fiyatları (₺/kg)</div>
+    <div class="form-row-3">
+      <div class="form-group"><label class="form-label">💵 Nakit</label><input class="form-input" type="number" step="0.01" id="mPropPriceNakit" value="${p?.priceNakit||''}"></div>
+      <div class="form-group"><label class="form-label">⛽ Yakıt Kartı</label><input class="form-input" type="number" step="0.01" id="mPropPriceYakit" value="${p?.priceYakit||''}"></div>
+      <div class="form-group"><label class="form-label">📄 Faturalı</label><input class="form-input" type="number" step="0.01" id="mPropPriceFatura" value="${p?.priceFatura||''}"></div>
+    </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Teklif Fiyatı (₺/kg)</label><input class="form-input" type="number" step="0.01" id="mPropPrice" value="${p?.price||''}"></div>
       <div class="form-group"><label class="form-label">Tarih</label><input class="form-input" type="date" id="mPropDate" value="${p?.date||today()}"></div>
+      <div class="form-group"><label class="form-label">Aşama</label>
+        <select class="form-select" id="mPropStage">
+          <option value="İlk Temas" ${p?.stage==='İlk Temas'?'selected':''}>İlk Temas</option>
+          <option value="Takip Gerekli" ${p?.stage==='Takip Gerekli'?'selected':''}>Takip Gerekli</option>
+          <option value="Anlaşma Sağlandı" ${(p?.stage||'').includes('Anlaş')?'selected':''}>Anlaşma Sağlandı</option>
+          <option value="Reddedildi" ${(p?.stage||'').includes('Ret')?'selected':''}>Reddedildi</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Rakip Firma</label><input class="form-input" id="mPropRival" value="${p?.rivalCompany||''}"></div>
+      <div class="form-group"><label class="form-label">Rakip Fiyat</label><input class="form-input" type="number" step="0.01" id="mPropRivalPrice" value="${p?.rivalPrice||''}"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Takip Gerekli</label>
@@ -3317,13 +3329,6 @@ function openProposalModal(id) {
         </select>
       </div>
       <div class="form-group" id="mFollowUpDateGroup" style="${p?.followUp?'':'display:none'}"><label class="form-label">Takip Tarihi</label><input class="form-input" type="date" id="mPropFollowDate" value="${p?.followUpDate||''}"></div>
-    </div>
-    <div class="form-group"><label class="form-label">Durum</label>
-      <select class="form-select" id="mPropStatus">
-        <option value="pending" ${p?.status==='pending'||!p?'selected':''}>Bekliyor</option>
-        <option value="accepted" ${p?.status==='accepted'?'selected':''}>Kabul</option>
-        <option value="rejected" ${p?.status==='rejected'?'selected':''}>Reddedildi</option>
-      </select>
     </div>
     <div class="form-group"><label class="form-label">Not</label><textarea class="form-textarea" id="mPropNote" rows="2">${p?.note||''}</textarea></div>
   `;
@@ -3360,15 +3365,22 @@ function saveProposal(id) {
     toast('İşletme seçin veya girin','error'); return;
   }
 
+  const priceN = parseFloat(document.getElementById('mPropPriceNakit').value)||0;
+  const priceY = parseFloat(document.getElementById('mPropPriceYakit').value)||0;
+  const priceF = parseFloat(document.getElementById('mPropPriceFatura').value)||0;
   const data = {
     customerId: customerId || null,
     businessName,
-    city: customerId ? APP.data.customers.find(x=>x.id===customerId)?.city || '' : '',
-    price: parseFloat(document.getElementById('mPropPrice').value)||0,
+    city: document.getElementById('mPropCity')?.value?.trim() || (customerId ? APP.data.customers.find(x=>x.id===customerId)?.city || '' : ''),
+    price: priceN || priceY || priceF,
+    priceNakit: priceN, priceYakit: priceY, priceFatura: priceF,
     date: document.getElementById('mPropDate').value || today(),
     followUp: document.getElementById('mPropFollowUp').value === 'yes',
     followUpDate: document.getElementById('mPropFollowDate')?.value || null,
-    status: document.getElementById('mPropStatus').value,
+    stage: document.getElementById('mPropStage').value,
+    status: document.getElementById('mPropStage').value.includes('Anlaş') ? 'accepted' : document.getElementById('mPropStage').value.includes('Ret') ? 'rejected' : 'pending',
+    rivalCompany: document.getElementById('mPropRival')?.value?.trim() || '',
+    rivalPrice: parseFloat(document.getElementById('mPropRivalPrice')?.value)||0,
     note: document.getElementById('mPropNote').value,
   };
 
