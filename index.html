@@ -1700,15 +1700,49 @@ function getRemainingText(days) {
 // ============================================================
 // DATA PERSISTENCE (Firestore or localStorage fallback)
 // ============================================================
-let _syncTimer = null;
+let _lastSynced = {}; // Shadow copy: { collectionName: { itemId: jsonString } }
 
 function saveData() {
   localStorage.setItem('ekosa_crm_v14', JSON.stringify(APP.data));
-  // Debounce Firebase sync (wait 800ms after last save)
-  if(isFirebaseReady && APP.currentUser) {
-    clearTimeout(_syncTimer);
-    _syncTimer = setTimeout(() => syncToFirestore(), 800);
+  if(!isFirebaseReady || !APP.currentUser) return;
+
+  // Auto-detect changed items and sync only those
+  const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
+    'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions'];
+  
+  for(const col of collections) {
+    const items = APP.data[col];
+    if(!items || !Array.isArray(items)) continue;
+    if(!_lastSynced[col]) _lastSynced[col] = {};
+    
+    for(const item of items) {
+      if(!item?.id) continue;
+      const json = JSON.stringify(item);
+      if(_lastSynced[col][item.id] !== json) {
+        // Changed or new — sync immediately
+        db.collection(col).doc(item.id).set(item).catch(e => console.warn('⚠️ sync:', col, e));
+        _lastSynced[col][item.id] = json;
+      }
+    }
   }
+  syncSettings();
+}
+
+// Sync a single item immediately (for direct calls)
+function syncItem(collection, item) {
+  if(!isFirebaseReady || !item?.id) return;
+  db.collection(collection).doc(item.id).set(item).catch(e => console.warn('syncItem:', e));
+}
+
+// Sync settings (counters, cities, etc.)
+function syncSettings() {
+  if(!isFirebaseReady) return;
+  db.collection('settings').doc('app').set({
+    receiptCounter: APP.data.receiptCounter || 0,
+    tediyeCounter: APP.data.tediyeCounter || 0,
+    productTypes: APP.data.productTypes || [],
+    cities: APP.data.cities || [],
+  }, {merge:true}).catch(e => console.warn('syncSettings:', e));
 }
 
 function loadData() {
@@ -1734,23 +1768,46 @@ async function syncToFirestore() {
   try {
     const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
       'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions'];
+    
+    // Use batched writes (max 500 per batch) for speed
+    let batch = db.batch();
+    let count = 0;
+    
     for(const col of collections) {
       if(!APP.data[col] || !Array.isArray(APP.data[col])) continue;
       for(const item of APP.data[col]) {
-        if(!item || typeof item !== 'object' || !item.id) continue;
-        try {
-          await db.collection(col).doc(item.id).set(item);
-        } catch(e) { console.warn('Sync error:', col, item.id, e); }
+        if(!item?.id) continue;
+        batch.set(db.collection(col).doc(item.id), item);
+        count++;
+        if(count >= 450) {
+          await batch.commit();
+          batch = db.batch();
+          count = 0;
+        }
       }
     }
-    // Save settings
-    await db.collection('settings').doc('app').set({
+    
+    // Settings
+    batch.set(db.collection('settings').doc('app'), {
       receiptCounter: APP.data.receiptCounter || 0,
       tediyeCounter: APP.data.tediyeCounter || 0,
       productTypes: APP.data.productTypes || [],
       cities: APP.data.cities || [],
     }, {merge:true});
-    console.log('🔄 Firebase sync tamamlandı');
+    count++;
+    
+    if(count > 0) await batch.commit();
+    
+    // Update shadow
+    _lastSynced = {};
+    for(const col of collections) {
+      _lastSynced[col] = {};
+      (APP.data[col]||[]).forEach(item => {
+        if(item?.id) _lastSynced[col][item.id] = JSON.stringify(item);
+      });
+    }
+    
+    console.log('🔄 Firebase full sync tamamlandı');
   } catch(e) {
     console.warn('Sync error:', e);
   }
