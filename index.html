@@ -646,6 +646,7 @@ input, select, textarea, button { font-family: var(--font); }
             <div class="sync-dot" id="syncDot"></div>
             <span id="syncText">Çevrimiçi</span>
           </div>
+          <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="firebaseDiagnostic()" title="Firebase Tanılama">🔧</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -2035,19 +2036,22 @@ function showApp() {
 
   // CRITICAL: Always try Firebase first for latest data
   if(isFirebaseReady) {
-    loadFromFirestore().then(() => {
+    // Quick Firebase connectivity test
+    db.collection('_test').doc('ping').set({ts:Date.now()}).then(() => {
+      toast('🟢 Firebase bağlantısı aktif', 'success');
+      return db.collection('_test').doc('ping').delete();
+    }).then(() => {
+      // Firebase works! Now load data
+      return loadFromFirestore();
+    }).then(() => {
       console.log('✅ Firebase verileri yüklendi');
       populateCityFilters();
       refreshCurrentPage();
-      // If this was a fresh import AND Firebase was empty, push IMPORT_DATA
       if(APP._freshImport && APP.data.customers.length > 0) {
-        // Check if Firebase already has data (don't overwrite)
         db.collection('customers').limit(1).get().then(snap => {
           if(snap.empty) {
-            console.log('Firebase boş — IMPORT_DATA yükleniyor...');
             clearAndPushToFirestore().then(() => startListeners());
           } else {
-            console.log('Firebase dolu — IMPORT_DATA atlanıyor');
             APP._freshImport = false;
             startListeners();
           }
@@ -2056,8 +2060,10 @@ function showApp() {
         startListeners();
       }
     }).catch(e => {
-      console.warn('Firebase load failed, using local:', e);
-      setupRealtimeListeners();
+      console.error('Firebase HATA:', e);
+      toast('🔴 Firebase HATASI: ' + e.message + ' — Güvenlik kurallarını kontrol edin!', 'error');
+      // Still start listeners in case read works but write doesn't
+      startListeners();
     });
   }
 
@@ -2172,7 +2178,7 @@ function updateSyncStatus() {
 
 async function manualSync() {
   if(!isFirebaseReady || !APP.currentUser) {
-    toast('Firebase bağlantısı yok', 'error');
+    toast('Firebase bağlantısı yok — isFirebaseReady:' + isFirebaseReady + ' user:' + !!APP.currentUser, 'error');
     return;
   }
   const text = document.getElementById('syncText');
@@ -2186,7 +2192,7 @@ async function manualSync() {
     populateCityFilters();
     refreshCurrentPage();
     text.textContent = '✅ Senkronize';
-    toast('✅ Firebase senkronizasyonu tamamlandı — ' + APP.data.customers.length + ' müşteri');
+    toast('✅ Firebase senkronizasyonu tamamlandı — ' + APP.data.customers.length + ' müşteri, ' + APP.data.vehicles.length + ' araç');
     setTimeout(() => updateSyncStatus(), 3000);
   } catch(e) {
     console.error('Manual sync error:', e);
@@ -2194,6 +2200,64 @@ async function manualSync() {
     toast('Senkronizasyon hatası: ' + e.message, 'error');
     setTimeout(() => updateSyncStatus(), 3000);
   }
+}
+
+async function firebaseDiagnostic() {
+  const results = [];
+  results.push('🔍 Firebase Tanılama Başladı...');
+  results.push('isFirebaseReady: ' + isFirebaseReady);
+  results.push('navigator.onLine: ' + navigator.onLine);
+  results.push('currentUser: ' + (APP.currentUser ? APP.currentUser.email : 'YOK'));
+  results.push('auth.currentUser: ' + (auth?.currentUser?.email || 'YOK'));
+  
+  if(!isFirebaseReady) {
+    results.push('❌ Firebase başlatılamadı!');
+    alert(results.join('\n'));
+    return;
+  }
+  
+  // Test 1: Write
+  try {
+    await db.collection('_test').doc('ping').set({ts: Date.now(), msg:'test'});
+    results.push('✅ Yazma: BAŞARILI');
+  } catch(e) {
+    results.push('❌ Yazma HATASI: ' + e.message);
+  }
+  
+  // Test 2: Read
+  try {
+    const doc = await db.collection('_test').doc('ping').get();
+    results.push('✅ Okuma: BAŞARILI — ' + JSON.stringify(doc.data()));
+  } catch(e) {
+    results.push('❌ Okuma HATASI: ' + e.message);
+  }
+  
+  // Test 3: Delete
+  try {
+    await db.collection('_test').doc('ping').delete();
+    results.push('✅ Silme: BAŞARILI');
+  } catch(e) {
+    results.push('❌ Silme HATASI: ' + e.message);
+  }
+  
+  // Test 4: Check collections
+  try {
+    const custSnap = await db.collection('customers').limit(3).get();
+    results.push('📊 Firebase customers: ' + custSnap.size + ' (limit 3)');
+    const vehSnap = await db.collection('vehicles').limit(3).get();
+    results.push('📊 Firebase vehicles: ' + vehSnap.size + ' (limit 3)');
+    vehSnap.docs.forEach(d => results.push('  🚛 ' + d.data().plate));
+  } catch(e) {
+    results.push('❌ Koleksiyon okuma HATASI: ' + e.message);
+  }
+  
+  // Test 5: Local state
+  results.push('📱 Local customers: ' + APP.data.customers.length);
+  results.push('📱 Local vehicles: ' + APP.data.vehicles.length);
+  APP.data.vehicles.forEach(v => results.push('  🚛 ' + v.plate));
+  
+  const body = '<pre style="font-size:12px;line-height:1.6;white-space:pre-wrap;max-height:70vh;overflow:auto;">' + results.join('\n') + '</pre>';
+  openModal('🔧 Firebase Tanılama', body, '<button class="btn btn-primary" onclick="closeModal()">Tamam</button>', '500px');
 }
 window.addEventListener('online', updateSyncStatus);
 window.addEventListener('offline', updateSyncStatus);
