@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="(async()=>{let r=['=== Tanılama v14.6 ===','Firebase ready: '+(typeof isFirebaseReady!=='undefined'?isFirebaseReady:'TANIMSIZ'),'Online: '+navigator.onLine,'db obj: '+(typeof db),'auth obj: '+(typeof auth),'APP obj: '+(typeof APP)];try{if(typeof APP!=='undefined'&&APP.currentUser){r.push('User: '+APP.currentUser.email)}else{r.push('User: YOK')}if(typeof APP!=='undefined'&&APP.data){r.push('Local müşteri: '+APP.data.customers.length);r.push('Local araç: '+APP.data.vehicles.length);APP.data.vehicles.forEach(v=>r.push(' 🚛 '+v.plate))}}catch(e){r.push('APP err: '+e.message)}if(typeof db!=='undefined'&&db){try{await db.collection('_test').doc('p').set({t:Date.now()});r.push('✅ YAZMA OK')}catch(e){r.push('❌ YAZMA: '+e.code+' '+e.message)}try{const s=await db.collection('vehicles').get();r.push('Firebase araç: '+s.size);s.docs.forEach(d=>r.push(' 🚛 '+(d.data().plate||d.id)))}catch(e){r.push('❌ OKUMA: '+e.code+' '+e.message)}}else{r.push('db YOK - Firebase yüklenemedi!')}alert(r.join('\n'))})()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v14.8</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v14.9</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -2308,8 +2308,8 @@ function populateCityFilters() {
   if(pEl) {
     const val = pEl.value;
     const personnelSet = new Set();
-    APP.data.visits.forEach(v => { if(v.personnelName) personnelSet.add(v.personnelName); });
-    APP.data.receipts.forEach(r => { if(r.personnelName) personnelSet.add(r.personnelName); });
+    (APP.data.visits||[]).forEach(v => { if(v.personnelName) personnelSet.add(v.personnelName); });
+    (APP.data.receipts||[]).forEach(r => { if(r.personnelName) personnelSet.add(r.personnelName); });
     pEl.innerHTML = '<option value="">Tüm Personel</option>';
     [...personnelSet].sort().forEach(p => {
       pEl.innerHTML += `<option value="${p}">${p}</option>`;
@@ -6363,11 +6363,12 @@ async function fullRestoreFromImport() {
 
     _lastSynced = {};
     APP._isPushing = false;
-    populateCityFilters();
-    refreshCurrentPage();
+    
+    try { populateCityFilters(); } catch(e) { console.warn('populateCityFilters err:', e); }
+    try { refreshCurrentPage(); } catch(e) { console.warn('refreshCurrentPage err:', e); }
     
     toast(`✅ ${APP.data.customers.length} müşteri, ${APP.data.visits.length} ziyaret yüklendi`, 'success');
-    alert(`✅ BAŞARILI!\n\n${APP.data.customers.length} müşteri\n${APP.data.visits.length} ziyaret\n${APP.data.proposals.length} teklif\n${APP.data.tediye.length} tediye\n\nDiğer cihazlar 1-2 dk içinde güncellenir.\n\n--- Log ---\n${log.slice(-10).join('\n')}`);
+    alert(`✅ BAŞARILI!\n\n${APP.data.customers.length} müşteri\n${APP.data.visits.length} ziyaret\n${APP.data.proposals.length} teklif\n${APP.data.tediye.length} tediye\n\nDiğer cihazlar 1-2 dk içinde güncellenir.`);
   } catch(e) {
     APP._isPushing = false;
     console.error('Full restore error:', e);
