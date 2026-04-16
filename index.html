@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="(async()=>{let r=['=== Tanılama v14.6 ===','Firebase ready: '+(typeof isFirebaseReady!=='undefined'?isFirebaseReady:'TANIMSIZ'),'Online: '+navigator.onLine,'db obj: '+(typeof db),'auth obj: '+(typeof auth),'APP obj: '+(typeof APP)];try{if(typeof APP!=='undefined'&&APP.currentUser){r.push('User: '+APP.currentUser.email)}else{r.push('User: YOK')}if(typeof APP!=='undefined'&&APP.data){r.push('Local müşteri: '+APP.data.customers.length);r.push('Local araç: '+APP.data.vehicles.length);APP.data.vehicles.forEach(v=>r.push(' 🚛 '+v.plate))}}catch(e){r.push('APP err: '+e.message)}if(typeof db!=='undefined'&&db){try{await db.collection('_test').doc('p').set({t:Date.now()});r.push('✅ YAZMA OK')}catch(e){r.push('❌ YAZMA: '+e.code+' '+e.message)}try{const s=await db.collection('vehicles').get();r.push('Firebase araç: '+s.size);s.docs.forEach(d=>r.push(' 🚛 '+(d.data().plate||d.id)))}catch(e){r.push('❌ OKUMA: '+e.code+' '+e.message)}}else{r.push('db YOK - Firebase yüklenemedi!')}alert(r.join('\n'))})()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v15.0</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v15.5</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -940,7 +940,10 @@ input, select, textarea, button { font-family: var(--font); }
                     <div style="font-size:48px;margin-bottom:16px;">✅</div>
                     <div style="font-size:18px;font-weight:700;margin-bottom:8px;">İşlem Tamamlandı!</div>
                     <div style="color:var(--text-secondary);margin-bottom:24px;" id="foCompleteInfo"></div>
-                    <button class="btn btn-primary" onclick="foReset()" style="padding:14px 32px;font-size:15px;">Yeni İşlem Başlat</button>
+                    <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+                      <button class="btn btn-primary" onclick="foReset()" style="padding:14px 32px;font-size:15px;">Yeni İşlem Başlat</button>
+                      <button class="btn btn-danger" onclick="foUndoLastAction()" style="padding:14px 32px;font-size:15px;" title="Son kaydedilen ziyaret ve makbuzu sil">↩️ Son İşlemi İptal Et</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -972,9 +975,12 @@ input, select, textarea, button { font-family: var(--font); }
         <div class="page" id="page-cityTracking">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
             <h2 style="font-size:16px;">İl Bazlı İşletme Takibi</h2>
-            <select class="form-select" id="cityTrackFilter" onchange="renderCityTracking()" style="width:auto;padding:8px 12px;">
-              <option value="">Tüm İller</option>
-            </select>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+              <input class="form-input" id="cityTrackSearch" oninput="renderCityTracking()" placeholder="🔍 İşletme ara..." style="min-width:180px;">
+              <select class="form-select" id="cityTrackFilter" onchange="renderCityTracking()" style="width:auto;padding:8px 12px;">
+                <option value="">Tüm İller</option>
+              </select>
+            </div>
           </div>
           <div class="widget">
             <div class="data-table-wrap">
@@ -1155,7 +1161,10 @@ input, select, textarea, button { font-family: var(--font); }
           <input type="hidden" id="cariSelectedCustomerId" value="">
           <div id="cariSelectedBanner" style="display:none;background:var(--accent);color:var(--primary-dark);padding:10px 16px;border-radius:var(--radius-sm);margin-bottom:16px;display:none;align-items:center;justify-content:space-between;">
             <span id="cariSelectedName" style="font-weight:700;"></span>
-            <button class="btn btn-sm" onclick="cariClearSelection()" style="background:rgba(0,0,0,0.15);color:var(--primary-dark);border:none;padding:4px 12px;">✕ Temizle</button>
+            <div style="display:flex;gap:6px;">
+              <button class="btn btn-sm" onclick="editSelectedCariCustomer()" style="background:rgba(255,255,255,0.9);color:var(--primary-dark);border:none;padding:4px 12px;font-weight:600;" title="İşletme bilgilerini düzenle">✏️ Düzenle</button>
+              <button class="btn btn-sm" onclick="cariClearSelection()" style="background:rgba(0,0,0,0.15);color:var(--primary-dark);border:none;padding:4px 12px;">✕ Temizle</button>
+            </div>
           </div>
           <div class="widget-grid">
             <div class="widget"><div class="widget-header"><div class="widget-title">Bakiye Özeti</div></div><div class="widget-body" id="cariSummary"></div></div>
@@ -1170,7 +1179,7 @@ input, select, textarea, button { font-family: var(--font); }
             </div>
             <div class="data-table-wrap">
               <table class="data-table">
-                <thead><tr><th>Tarih</th><th>İşlem</th><th>Açıklama</th><th>Borç</th><th>Alacak</th><th>Bakiye</th></tr></thead>
+                <thead><tr><th>Tarih</th><th>İşlem</th><th>Açıklama</th><th>Borç</th><th>Alacak</th><th>Bakiye</th><th>İşlem</th></tr></thead>
                 <tbody id="cariBody"></tbody>
               </table>
             </div>
@@ -1262,6 +1271,7 @@ input, select, textarea, button { font-family: var(--font); }
             <div class="tab" onclick="switchAdminTab('facilitiesAdmin')">Tesisler</div>
             <div class="tab" onclick="switchAdminTab('productsAdmin')">Ürün Türleri</div>
             <div class="tab" onclick="switchAdminTab('logo')">🖼️ Logo</div>
+            <div class="tab" onclick="switchAdminTab('auditLog')">📋 Log Defteri</div>
             <div class="tab" onclick="switchAdminTab('dataMigration')">📦 Veri Aktarma</div>
             <div class="tab" onclick="switchAdminTab('backup')" style="color:var(--accent);">💾 Yedekleme</div>
           </div>
@@ -1438,6 +1448,7 @@ const APP = {
     depotExits: [],
     depotEntries: [],
     contracts: [],
+    actionLog: [],
     receiptCounter: 0,
     tediyeCounter: 0,
   }
@@ -1571,6 +1582,151 @@ function generateTeslimFisiPDF(receiptId) {
   openPrintWindow(html);
 }
 
+function generateTediyeMakbuzPDF(tediyeId) {
+  const t = APP.data.tediye.find(x=>x.id===tediyeId);
+  if(!t) return;
+  const dateStr = formatDate(t.date);
+  const amtNum = Math.floor(t.amount||0);
+  const amtWords = tutarYaziyaCevir(amtNum)+' Türk Lirası';
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <style>
+    @page{size:A4;margin:20mm 15mm}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#333;padding:20px}
+    .title-bar{background:linear-gradient(135deg,#1B2A4A,#2C3E6B);color:#fff;padding:10px 16px;border-radius:6px;text-align:center;margin:14px 0;font-size:14px;font-weight:700;letter-spacing:1px}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+    .info-box{background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:12px}
+    .info-box label{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:0.3px;display:block;margin-bottom:3px}
+    .info-box span{font-size:12px;font-weight:600;color:#333}
+    .amount-box{background:#e8f5e9;border:2px solid #2e7d32;border-radius:8px;padding:20px;margin:16px 0;text-align:center}
+    .amount-box .lbl{font-size:10px;color:#666;text-transform:uppercase;margin-bottom:6px}
+    .amount-box .val{font-size:28px;font-weight:800;color:#2e7d32}
+    .amount-box .words{font-size:12px;color:#555;margin-top:8px;font-style:italic}
+    .desc{background:#fff3e0;border:1px solid #ffcc80;border-radius:6px;padding:12px;margin:12px 0;font-size:12px}
+    .sign-area{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:50px;text-align:center}
+    .sign-box{border-top:1px solid #333;padding-top:8px;font-size:10px;color:#555}
+  </style></head><body>
+  ${pdfBaslik()}
+  <div class="title-bar">TEDİYE MAKBUZU</div>
+  <div class="info-grid">
+    <div class="info-box"><label>Makbuz No</label><span>${t.tediyeNo||'-'}</span></div>
+    <div class="info-box"><label>Tarih</label><span>${dateStr}</span></div>
+    <div class="info-box"><label>Ödemeyi Alan Kişi</label><span>${t.personName||'-'}</span></div>
+    <div class="info-box"><label>T.C. Kimlik No</label><span>${t.personTC||'-'}</span></div>
+    <div class="info-box" style="grid-column:span 2;"><label>Adres</label><span>${(t.city||'-')+(t.district?' / '+t.district:'')}</span></div>
+  </div>
+  <div class="desc">
+    <strong>Mal/Hizmet Cinsi:</strong> Bitkisel Atık Yağ Bedeli
+  </div>
+  <div class="amount-box">
+    <div class="lbl">Ödenen Tutar</div>
+    <div class="val">${formatMoney(t.amount||0)}</div>
+    <div class="words">(${amtWords})</div>
+  </div>
+  <p style="font-size:12px;text-align:center;margin-top:16px;font-style:italic;color:#555;">Yukarıda belirtilen mal/hizmet bedelini eksiksiz aldım.</p>
+  <div class="sign-area">
+    <div><div style="height:60px;"></div><div class="sign-box">TESLİM EDEN<br><strong>${FIRMA.adKisa||'EKOSA'}</strong></div></div>
+    <div><div style="height:60px;"></div><div class="sign-box">TESLİM ALAN<br><strong>${t.personName||''}</strong></div></div>
+  </div>
+  ${pdfAltBilgi()}
+  </body></html>`;
+  openPrintWindow(html);
+}
+
+// Generate PDF as Blob for sharing
+async function generateReceiptPDFBlob(receiptId, forTediye=false) {
+  let html;
+  if(forTediye) {
+    const t = APP.data.tediye.find(x=>x.id===receiptId);
+    if(!t) return null;
+    const dateStr = formatDate(t.date);
+    const amtNum = Math.floor(t.amount||0);
+    const amtWords = tutarYaziyaCevir(amtNum)+' Türk Lirası';
+    html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <style>
+      @page{size:A4;margin:20mm 15mm}
+      *{margin:0;padding:0;box-sizing:border-box}
+      body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#333;padding:20px}
+      .title-bar{background:linear-gradient(135deg,#1B2A4A,#2C3E6B);color:#fff;padding:10px 16px;border-radius:6px;text-align:center;margin:14px 0;font-size:14px;font-weight:700}
+      .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+      .info-box{background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:12px}
+      .info-box label{font-size:9px;color:#888;text-transform:uppercase;display:block;margin-bottom:3px}
+      .info-box span{font-size:12px;font-weight:600}
+      .amount-box{background:#e8f5e9;border:2px solid #2e7d32;border-radius:8px;padding:20px;margin:16px 0;text-align:center}
+      .amount-box .val{font-size:28px;font-weight:800;color:#2e7d32}
+    </style></head><body>${pdfBaslik()}
+    <div class="title-bar">TEDİYE MAKBUZU</div>
+    <div class="info-grid">
+      <div class="info-box"><label>Makbuz No</label><span>${t.tediyeNo}</span></div>
+      <div class="info-box"><label>Tarih</label><span>${dateStr}</span></div>
+      <div class="info-box"><label>Alan Kişi</label><span>${t.personName}</span></div>
+      <div class="info-box"><label>TC Kimlik</label><span>${t.personTC||'-'}</span></div>
+    </div>
+    <div class="amount-box"><div style="font-size:10px;color:#666;">Ödenen Tutar</div><div class="val">${formatMoney(t.amount)}</div><div style="margin-top:8px;font-size:11px;font-style:italic;">(${amtWords})</div></div>
+    ${pdfAltBilgi()}
+    </body></html>`;
+  }
+  const blob = new Blob([html], { type: 'text/html' });
+  return blob;
+}
+
+// Share a receipt via WhatsApp (PDF or text message)
+async function shareReceiptWhatsApp(receiptId) {
+  const r = APP.data.receipts.find(x=>x.id===receiptId);
+  if(!r) return;
+  
+  // Build message text
+  const showPrice = r.printType !== 'fiyatsiz';
+  let msg = `*BİTKİSEL ATIK YAĞ TESLİM FİŞİ*\n\n`;
+  msg += `📄 Fiş No: ${r.receiptNo}\n`;
+  msg += `📅 Tarih: ${formatDate(r.date)}\n`;
+  msg += `🏢 İşletme: ${r.customerName}\n`;
+  msg += `📍 ${r.city||''} ${r.district?'/ '+r.district:''}\n\n`;
+  msg += `📦 Miktar: *${r.quantity} kg*\n`;
+  if(showPrice) {
+    msg += `💵 Birim Fiyat: ${formatMoney(r.unitPrice)}/kg\n`;
+    msg += `💰 *TOPLAM: ${formatMoney(r.total)}*\n`;
+  }
+  msg += `\n_${FIRMA.adKisa||'EKOSA'}_\n${FIRMA.tel||''}`;
+
+  // Try native share API first (mobile)
+  if(navigator.share) {
+    try {
+      await navigator.share({ title: 'Teslim Fişi ' + r.receiptNo, text: msg });
+      return;
+    } catch(e) { if(e.name === 'AbortError') return; }
+  }
+  // Fallback: open WhatsApp web with pre-filled message
+  const url = 'https://wa.me/?text=' + encodeURIComponent(msg);
+  window.open(url, '_blank');
+}
+
+// Share tediye via WhatsApp
+async function shareTediyeWhatsApp(tediyeId) {
+  const t = APP.data.tediye.find(x=>x.id===tediyeId);
+  if(!t) return;
+  
+  let msg = `*TEDİYE MAKBUZU*\n\n`;
+  msg += `📄 Makbuz No: ${t.tediyeNo}\n`;
+  msg += `📅 Tarih: ${formatDate(t.date)}\n`;
+  msg += `👤 Ödemeyi Alan: ${t.personName}\n`;
+  if(t.personTC) msg += `🆔 TC: ${t.personTC}\n`;
+  msg += `📍 ${t.city||''} ${t.district?'/ '+t.district:''}\n\n`;
+  msg += `💰 *Ödenen Tutar: ${formatMoney(t.amount)}*\n`;
+  msg += `_(${tutarYaziyaCevir(Math.floor(t.amount||0))} Türk Lirası)_\n\n`;
+  msg += `_${FIRMA.adKisa||'EKOSA'}_\n${FIRMA.tel||''}`;
+
+  if(navigator.share) {
+    try {
+      await navigator.share({ title: 'Tediye Makbuzu ' + t.tediyeNo, text: msg });
+      return;
+    } catch(e) { if(e.name === 'AbortError') return; }
+  }
+  const url = 'https://wa.me/?text=' + encodeURIComponent(msg);
+  window.open(url, '_blank');
+}
+
 function generateHesapEkstresiPDF(customerId) {
   const cust = APP.data.customers.find(c=>c.id===customerId);
   if(!cust) { toast('Müşteri bulunamadı','error'); return; }
@@ -1642,6 +1798,56 @@ function generateHesapEkstresiPDF(customerId) {
   openPrintWindow(html);
 }
 
+// ============================================================
+// PERMISSIONS - Role-based access control
+// ============================================================
+function isAdmin() {
+  return APP.currentUser?.role === 'admin';
+}
+
+function canEditRecord(record) {
+  // Admins can edit anything
+  if(isAdmin()) return true;
+  // If record has no creator, allow (legacy records)
+  if(!record || !record.personnelName && !record.createdBy) return true;
+  // Field staff can only edit their own records
+  const creator = record.personnelName || record.createdBy;
+  const currentName = APP.currentUser?.name;
+  return creator === currentName;
+}
+
+function canDeleteRecord(record) {
+  // Same rules as edit for now
+  return canEditRecord(record);
+}
+
+// Log action for audit trail (Madde 12)
+function logAction(action, entity, details) {
+  if(!APP.currentUser) return;
+  const now = Date.now();
+  const entry = {
+    id: uid(),
+    ts: now,
+    date: new Date(now).toISOString().split('T')[0],
+    user: APP.currentUser.name || APP.currentUser.email || 'Bilinmiyor',
+    userEmail: APP.currentUser.email || '',
+    action: action, // 'create', 'update', 'delete'
+    entity: entity, // 'customer', 'receipt', 'tediye', 'visit', 'proposal', ...
+    details: details || ''
+  };
+  if(!APP.data.actionLog) APP.data.actionLog = [];
+  APP.data.actionLog.unshift(entry);
+  
+  // Keep only last 30 days of logs
+  const cutoff = now - 30*24*60*60*1000;
+  APP.data.actionLog = APP.data.actionLog.filter(l => l.ts > cutoff);
+
+  // Sync to Firebase
+  if(isFirebaseReady) {
+    db.collection('actionLog').doc(entry.id).set(entry).catch(e => console.warn('log sync:', e));
+  }
+}
+
 function toast(msg, type='success') {
   const c = document.getElementById('toastContainer');
   const t = document.createElement('div');
@@ -1710,7 +1916,7 @@ function saveData() {
 
   // Auto-detect changed items and sync only those
   const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
-    'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions'];
+    'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions','actionLog'];
   
   for(const col of collections) {
     const items = APP.data[col];
@@ -1769,7 +1975,7 @@ async function syncToFirestore() {
   if(!isFirebaseReady) return;
   try {
     const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
-      'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions'];
+      'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions','actionLog'];
     
     // Use batched writes (max 500 per batch) for speed
     let batch = db.batch();
@@ -1841,7 +2047,7 @@ async function loadFromFirestore() {
   if(!isFirebaseReady) return;
   try {
     const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
-      'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions'];
+      'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions','actionLog'];
     let hasAnyData = false;
     for(const col of collections) {
       const snap = await db.collection(col).get();
@@ -2767,18 +2973,30 @@ function saveCustomer(id) {
   if(id) {
     const idx = APP.data.customers.findIndex(c=>c.id===id);
     if(idx>=0) APP.data.customers[idx] = {...APP.data.customers[idx], ...data};
+    logAction('update', 'customer', `${data.name} - ${data.city||''}`);
   } else {
     APP.data.customers.push({id:uid(), ...data, createdAt:today()});
+    logAction('create', 'customer', `${data.name} - ${data.city||''}`);
   }
 
   saveData(); closeModal(); renderCustomers(); populateCityFilters();
+  // If we're on cari hesap page with this customer selected, refresh it
+  if(APP.currentPage === 'cariHesap' && document.getElementById('cariSelectedCustomerId')?.value === id) {
+    const c = APP.data.customers.find(x=>x.id===id);
+    if(c) document.getElementById('cariSelectedName').textContent = c.name + ' — ' + (c.city||'');
+    renderCariHesap();
+  }
   toast(id ? 'Müşteri güncellendi' : 'Müşteri eklendi');
 }
 
 function deleteCustomer(id) {
+  const c = APP.data.customers.find(x=>x.id===id);
+  if(!c) return;
+  if(!isAdmin()) { toast('Müşteri silme yetkisi sadece admin kullanıcılarında vardır','error'); return; }
   if(!confirm('Bu müşteriyi silmek istediğinize emin misiniz?')) return;
   APP.data.customers = APP.data.customers.filter(c=>c.id!==id);
   deleteFromFirestore('customers', id);
+  logAction('delete', 'customer', `${c.name} - ${c.city||''}`);
   saveData(); closeModal(); renderCustomers();
   toast('Müşteri silindi');
 }
@@ -2878,6 +3096,7 @@ function foSelectCustomer(id) {
   const c = APP.data.customers.find(x=>x.id===id);
   if(!c) return;
   foState.selectedCustomer = c;
+  foState.originalLastVisit = c.lastVisit; // Remember for potential undo
 
   document.getElementById('fo-step1').style.display = 'none';
   document.getElementById('fo-step2').style.display = '';
@@ -3020,6 +3239,7 @@ function foSaveCollection() {
   };
   APP.data.receipts.push(receipt);
   foState.lastReceipt = receipt;
+  logAction('create', 'receipt', `${receipt.receiptNo} - ${receipt.customerName} - ${qty}kg x ${formatMoney(price)} = ${formatMoney(subtotal)}`);
 
   // Create visit (GPS will be added later to not block UI)
   const visit = {
@@ -3033,6 +3253,7 @@ function foSaveCollection() {
   };
   APP.data.visits.push(visit);
   foState.lastVisit = visit;
+  logAction('create', 'visit', `${c.name} - Alım: ${qty}kg`);
 
   // Update vehicle stock
   if(vehicle) vehicle.stock = (vehicle.stock||0) + qty;
@@ -3401,6 +3622,59 @@ function foReset() {
   window.scrollTo(0,0);
 }
 
+function foUndoLastAction() {
+  if(!foState.lastVisit && !foState.lastReceipt) {
+    toast('İptal edilecek işlem yok','info');
+    return;
+  }
+
+  let msg = '↩️ Son işlem iptal edilecek:\n\n';
+  if(foState.lastReceipt) msg += `• Makbuz: ${foState.lastReceipt.receiptNo} (${foState.lastReceipt.quantity} kg × ${formatMoney(foState.lastReceipt.unitPrice)})\n`;
+  if(foState.lastVisit) msg += `• Ziyaret: ${foState.lastVisit.customerName} — ${foState.lastVisit.collected?'Alım Yapıldı':'Alım Yapılmadı'}\n`;
+  msg += '\nVeriler silinecek ve müşterinin son ziyaret tarihi eski haline dönecek. Emin misiniz?';
+
+  if(!confirm(msg)) return;
+
+  // Remove receipt if exists
+  if(foState.lastReceipt) {
+    const r = foState.lastReceipt;
+    APP.data.receipts = APP.data.receipts.filter(x => x.id !== r.id);
+    deleteFromFirestore('receipts', r.id);
+    // Return stock to vehicle
+    if(r.vehicleId) {
+      const v = APP.data.vehicles.find(x => x.id === r.vehicleId);
+      if(v) v.stock = Math.max(0, (v.stock||0) - (r.quantity||0));
+    }
+    // Remove receipt counter increment
+    APP.data.receiptCounter = Math.max(0, (APP.data.receiptCounter||1) - 1);
+    // Remove related cari transaction
+    APP.data.cariTransactions = APP.data.cariTransactions.filter(t => !(t.customerId === r.customerId && t.description && t.description.includes(r.receiptNo)));
+  }
+
+  // Remove visit
+  if(foState.lastVisit) {
+    APP.data.visits = APP.data.visits.filter(x => x.id !== foState.lastVisit.id);
+    deleteFromFirestore('visits', foState.lastVisit.id);
+  }
+
+  // Restore customer's original lastVisit
+  const c = foState.selectedCustomer;
+  if(c && foState.originalLastVisit !== undefined) {
+    const custIdx = APP.data.customers.findIndex(x => x.id === c.id);
+    if(custIdx >= 0) {
+      APP.data.customers[custIdx].lastVisit = foState.originalLastVisit || '';
+    }
+  }
+
+  saveData();
+  toast('✅ Son işlem iptal edildi ve veriler eski haline döndü','success');
+
+  // Reset UI
+  foState.lastReceipt = null;
+  foState.lastVisit = null;
+  foReset();
+}
+
 // ============================================================
 // VISITS (Ziyaret Geçmişi)
 // ============================================================
@@ -3428,8 +3702,8 @@ function renderVisits() {
     <td>${payments}</td>
     <td>${v.personnelName||'-'}</td>
     <td>
-      <button class="btn btn-sm btn-secondary" onclick="openEditVisitModal('${v.id}')">Düzenle</button>
-      <button class="btn btn-sm btn-danger" onclick="deleteVisit('${v.id}')">Sil</button>
+      ${canEditRecord(v) ? `<button class="btn btn-sm btn-secondary" onclick="openEditVisitModal('${v.id}')">Düzenle</button>` : ''}
+      ${canDeleteRecord(v) ? `<button class="btn btn-sm btn-danger" onclick="deleteVisit('${v.id}')">Sil</button>` : ''}
       ${receipt ? '<button class="btn btn-sm btn-danger" onclick="deleteReceipt(\''+receipt.id+'\')">Makbuz Sil</button>' : ''}
     </td>
   </tr>`;
@@ -3438,16 +3712,70 @@ function renderVisits() {
 function filterVisits() { renderVisits(); }
 
 function deleteVisit(id) {
-  if(!confirm('Bu ziyaret kaydını silmek istediğinize emin misiniz?')) return;
+  const visit = APP.data.visits.find(v=>v.id===id);
+  if(!visit) return;
+  if(!canDeleteRecord(visit)) { toast('Bu kaydı silme yetkiniz yok. Sadece oluşturan kişi veya admin silebilir.','error'); return; }
+
+  // Find related receipts and tediye
+  const relReceipts = APP.data.receipts.filter(r => r.visitId === id || (r.customerId === visit.customerId && r.date === visit.date));
+  const relTediye = APP.data.tediye.filter(t => t.visitId === id || (t.customerId === visit.customerId && t.date === visit.date));
+  const relCari = APP.data.cariTransactions.filter(t => t.visitId === id);
+
+  let warningMsg = `🗑️ Bu ziyareti silmek istediğinize emin misiniz?\n\n`;
+  warningMsg += `İşletme: ${visit.customerName}\n`;
+  warningMsg += `Tarih: ${formatDate(visit.date)}\n`;
+  if(visit.collected) warningMsg += `Alım: ${visit.quantity || 0} kg × ${visit.price || 0} ₺\n`;
+
+  if(relReceipts.length > 0 || relTediye.length > 0 || relCari.length > 0) {
+    warningMsg += `\n⚠️ BU İŞLEM AŞAĞIDAKİLERİ DE SİLECEKTİR:\n`;
+    if(relReceipts.length > 0) warningMsg += `• ${relReceipts.length} adet alım makbuzu\n`;
+    if(relTediye.length > 0) warningMsg += `• ${relTediye.length} adet tediye (ödeme) makbuzu\n`;
+    if(relCari.length > 0) warningMsg += `• ${relCari.length} adet cari hareket\n`;
+  }
+  warningMsg += `\n[Tamam = Sil] [İptal = Vazgeç]`;
+
+  if(!confirm(warningMsg)) return;
+
+  // Delete related items
+  relReceipts.forEach(r => {
+    APP.data.receipts = APP.data.receipts.filter(x => x.id !== r.id);
+    deleteFromFirestore('receipts', r.id);
+    // Return stock to vehicle if applicable
+    if(r.vehicleId) {
+      const v = APP.data.vehicles.find(x => x.id === r.vehicleId);
+      if(v) v.stock = Math.max(0, (v.stock||0) - (r.quantity||0));
+    }
+  });
+  relTediye.forEach(t => {
+    APP.data.tediye = APP.data.tediye.filter(x => x.id !== t.id);
+    deleteFromFirestore('tediye', t.id);
+  });
+  relCari.forEach(t => {
+    APP.data.cariTransactions = APP.data.cariTransactions.filter(x => x.id !== t.id);
+    deleteFromFirestore('cariTransactions', t.id);
+  });
+
+  // Restore customer's lastVisit to previous visit or clear
+  const customerVisits = APP.data.visits.filter(v => v.customerId === visit.customerId && v.id !== id).sort((a,b)=>b.date.localeCompare(a.date));
+  const customer = APP.data.customers.find(c => c.id === visit.customerId);
+  if(customer) {
+    customer.lastVisit = customerVisits[0]?.date || '';
+  }
+
+  // Delete the visit
   APP.data.visits = APP.data.visits.filter(v=>v.id!==id);
   deleteFromFirestore('visits', id);
-  saveData(); renderVisits();
-  toast('Ziyaret kaydı silindi');
+  logAction('delete', 'visit', `${visit.customerName} - ${formatDate(visit.date)} - ${visit.collected?visit.quantity+'kg':'Alım yok'}`);
+
+  saveData();
+  renderVisits();
+  toast(`✅ Ziyaret silindi (${relReceipts.length} makbuz, ${relTediye.length} tediye de silindi)`, 'success');
 }
 
 function openEditVisitModal(id) {
   const v = APP.data.visits.find(x=>x.id===id);
   if(!v) return;
+  if(!canEditRecord(v)) { toast('Bu ziyareti düzenleme yetkiniz yok.','error'); return; }
   const body = `
     <div class="form-row">
       <div class="form-group"><label class="form-label">Tarih</label><input class="form-input" type="date" id="mVisDate" value="${v.date||''}"></div>
@@ -3516,35 +3844,90 @@ function saveEditVisit(id) {
 }
 
 function deleteReceipt(id) {
-  if(!confirm('Bu makbuzu silmek istediğinize emin misiniz? İlgili cari işlemler de silinecek.')) return;
   const receipt = APP.data.receipts.find(r=>r.id===id);
-  if(receipt) {
-    // Remove related cari transactions
-    const removedCari = APP.data.cariTransactions.filter(t => t.description?.indexOf(receipt.receiptNo)!==-1);
-    APP.data.cariTransactions = APP.data.cariTransactions.filter(t => t.description?.indexOf(receipt.receiptNo)===-1);
-    deleteMultipleFromFirestore('cariTransactions', removedCari.map(t=>t.id));
-    // Remove related tediye
-    const removedTediye = APP.data.tediye.filter(t => t.receiptId === id);
-    APP.data.tediye = APP.data.tediye.filter(t => t.receiptId !== id);
-    deleteMultipleFromFirestore('tediye', removedTediye.map(t=>t.id));
-    // Reverse vehicle stock if needed
-    if(receipt.vehicleId) {
-      const v = APP.data.vehicles.find(x=>x.id===receipt.vehicleId);
-      if(v) v.stock = Math.max(0, (v.stock||0) - receipt.quantity);
+  if(!receipt) return;
+  if(!canDeleteRecord(receipt)) { toast('Bu kaydı silme yetkiniz yok. Sadece oluşturan kişi veya admin silebilir.','error'); return; }
+
+  const relTediye = APP.data.tediye.filter(t => t.receiptId === id);
+  const relCari = APP.data.cariTransactions.filter(t => t.description?.indexOf(receipt.receiptNo)!==-1);
+  const relVisit = APP.data.visits.find(v => v.customerId===receipt.customerId && v.date===receipt.date && v.quantity===receipt.quantity);
+
+  let warning = `🗑️ Bu makbuzu silmek istediğinize emin misiniz?\n\n`;
+  warning += `Makbuz: ${receipt.receiptNo}\n`;
+  warning += `İşletme: ${receipt.customerName}\n`;
+  warning += `Miktar: ${receipt.quantity} kg × ${formatMoney(receipt.unitPrice)}/kg = ${formatMoney(receipt.total)}\n`;
+  warning += `\n⚠️ ŞUNLAR DA SİLİNECEK:\n`;
+  if(relTediye.length) warning += `• ${relTediye.length} adet tediye makbuzu\n`;
+  if(relCari.length) warning += `• ${relCari.length} adet cari hareket\n`;
+  if(relVisit) warning += `• 1 adet ziyaret kaydı\n`;
+  warning += `• Araç stoğundan ${receipt.quantity} kg düşülecek\n`;
+
+  if(!confirm(warning)) return;
+
+  // Remove cari transactions
+  APP.data.cariTransactions = APP.data.cariTransactions.filter(t => t.description?.indexOf(receipt.receiptNo)===-1);
+  deleteMultipleFromFirestore('cariTransactions', relCari.map(t=>t.id));
+
+  // Remove related tediye
+  APP.data.tediye = APP.data.tediye.filter(t => t.receiptId !== id);
+  deleteMultipleFromFirestore('tediye', relTediye.map(t=>t.id));
+
+  // Remove visit
+  if(relVisit) {
+    APP.data.visits = APP.data.visits.filter(v => v.id !== relVisit.id);
+    deleteFromFirestore('visits', relVisit.id);
+
+    // Restore customer's lastVisit
+    const prevVisits = APP.data.visits.filter(v => v.customerId === receipt.customerId).sort((a,b)=>b.date.localeCompare(a.date));
+    const customer = APP.data.customers.find(c => c.id === receipt.customerId);
+    if(customer) {
+      customer.lastVisit = prevVisits[0]?.date || '';
     }
   }
+
+  // Reverse vehicle stock
+  if(receipt.vehicleId) {
+    const v = APP.data.vehicles.find(x=>x.id===receipt.vehicleId);
+    if(v) v.stock = Math.max(0, (v.stock||0) - receipt.quantity);
+  }
+
+  // Remove receipt
   APP.data.receipts = APP.data.receipts.filter(r=>r.id!==id);
   deleteFromFirestore('receipts', id);
-  saveData(); renderVisits(); renderReceipts();
-  toast('Makbuz ve ilgili kayıtlar silindi');
+  logAction('delete', 'receipt', `${receipt.receiptNo} - ${receipt.customerName} - ${formatMoney(receipt.total)}`);
+
+  saveData();
+  renderVisits();
+  renderReceipts();
+  if(APP.currentPage === 'cariHesap') renderCariHesap();
+  toast(`✅ Makbuz silindi (${relTediye.length} tediye, ${relCari.length} cari hareket, ${relVisit?1:0} ziyaret)`, 'success');
 }
 
 function deleteTediye(id) {
-  if(!confirm('Bu tediye makbuzunu silmek istediğinize emin misiniz?')) return;
-  APP.data.tediye = APP.data.tediye.filter(t=>t.id!==id);
+  const t = APP.data.tediye.find(x=>x.id===id);
+  if(!t) return;
+  if(!canDeleteRecord(t)) { toast('Bu kaydı silme yetkiniz yok. Sadece oluşturan kişi veya admin silebilir.','error'); return; }
+
+  const relCari = APP.data.cariTransactions.filter(c => c.tediyeId === id || c.description?.indexOf(t.tediyeNo)!==-1);
+
+  let warning = `🗑️ Bu tediye makbuzunu silmek istediğinize emin misiniz?\n\n`;
+  warning += `Tediye No: ${t.tediyeNo}\n`;
+  warning += `Alan: ${t.personName}\n`;
+  warning += `Tutar: ${formatMoney(t.amount)}\n`;
+  if(relCari.length) warning += `\n⚠️ ${relCari.length} adet cari hareket de silinecek\n`;
+
+  if(!confirm(warning)) return;
+
+  // Remove related cari
+  APP.data.cariTransactions = APP.data.cariTransactions.filter(c => c.tediyeId !== id && c.description?.indexOf(t.tediyeNo)===-1);
+  deleteMultipleFromFirestore('cariTransactions', relCari.map(c=>c.id));
+
+  APP.data.tediye = APP.data.tediye.filter(x=>x.id!==id);
   deleteFromFirestore('tediye', id);
+  logAction('delete', 'tediye', `${t.tediyeNo} - ${t.personName} - ${formatMoney(t.amount)}`);
   saveData(); renderReceipts();
-  toast('Tediye makbuzu silindi');
+  if(APP.currentPage === 'cariHesap') renderCariHesap();
+  toast(`✅ Tediye silindi${relCari.length?' ('+relCari.length+' cari hareket de)':''}`, 'success');
 }
 
 // ============================================================
@@ -3553,8 +3936,15 @@ function deleteTediye(id) {
 function renderCityTracking() {
   const tbody = document.getElementById('cityTrackBody');
   const cityF = document.getElementById('cityTrackFilter')?.value || '';
+  const searchQ = (document.getElementById('cityTrackSearch')?.value||'').toLowerCase().trim();
   let customers = APP.data.customers.filter(c => c.type === 'periodic');
   if(cityF) customers = customers.filter(c => c.city === cityF);
+  if(searchQ) customers = customers.filter(c =>
+    (c.name||'').toLowerCase().includes(searchQ) ||
+    (c.city||'').toLowerCase().includes(searchQ) ||
+    (c.district||'').toLowerCase().includes(searchQ) ||
+    (c.contact||'').toLowerCase().includes(searchQ)
+  );
 
   // Sort by remaining days ascending
   customers = customers.map(c => ({...c, remaining: getRemainingDays(c)}))
@@ -3563,7 +3953,7 @@ function renderCityTracking() {
   tbody.innerHTML = customers.map(c => {
     const remClass = getRemainingClass(c.remaining);
     const remText = getRemainingText(c.remaining);
-    return `<tr>
+    return `<tr style="cursor:pointer;" onclick="openCustomerFromDashboard('${c.id}')" title="Cari hesabı aç">
       <td><strong>${c.name}</strong></td>
       <td>${c.city||'-'} / ${c.district||'-'}</td>
       <td>${c.period} gün</td>
@@ -3574,10 +3964,16 @@ function renderCityTracking() {
   }).join('');
 
   // Also show on-demand customers
-  const onDemand = APP.data.customers.filter(c => c.type === 'onDemand' && (!cityF || c.city === cityF));
+  let onDemand = APP.data.customers.filter(c => c.type === 'onDemand' && (!cityF || c.city === cityF));
+  if(searchQ) onDemand = onDemand.filter(c =>
+    (c.name||'').toLowerCase().includes(searchQ) ||
+    (c.city||'').toLowerCase().includes(searchQ) ||
+    (c.district||'').toLowerCase().includes(searchQ) ||
+    (c.contact||'').toLowerCase().includes(searchQ)
+  );
   if(onDemand.length) {
     tbody.innerHTML += `<tr><td colspan="6" style="background:var(--bg);font-weight:600;font-size:12px;color:var(--text-secondary);padding:12px 16px;">TALEP ÜZERİNE MÜŞTERİLER</td></tr>`;
-    tbody.innerHTML += onDemand.map(c => `<tr>
+    tbody.innerHTML += onDemand.map(c => `<tr style="cursor:pointer;" onclick="openCustomerFromDashboard('${c.id}')" title="Cari hesabı aç">
       <td>${c.name}</td><td>${c.city||'-'} / ${c.district||'-'}</td><td>-</td><td>${c.lastVisit?formatDate(c.lastVisit):'-'}</td><td><span class="wlist-tag tag-blue">Talep Üzerine</span></td><td>-</td>
     </tr>`).join('');
   }
@@ -3621,8 +4017,10 @@ function renderProposals() {
     <td>${p.followUpDate ? formatDate(p.followUpDate) : '-'} ${isOverdue?'<span class="wlist-tag tag-red" style="font-size:10px;">!</span>':''}</td>
     <td style="font-size:11px;">${p.note||'-'}</td>
     <td style="white-space:nowrap;">
-      <button class="btn btn-sm btn-secondary" onclick="openProposalModal('${p.id}')">✏️</button>
-      <button class="btn btn-sm btn-danger" onclick="deleteProposal('${p.id}')">🗑️</button>
+      <button class="btn btn-sm btn-primary" onclick="viewProposalPDF('${p.id}')" title="Teklifi Görüntüle / PDF">👁️</button>
+      <button class="btn btn-sm" style="background:#25D366;color:#fff;" onclick="shareProposalWhatsApp('${p.id}')" title="WhatsApp Paylaş">📲</button>
+      ${canEditRecord(p) ? `<button class="btn btn-sm btn-secondary" onclick="openProposalModal('${p.id}')" title="Düzenle">✏️</button>` : ''}
+      ${canDeleteRecord(p) ? `<button class="btn btn-sm btn-danger" onclick="deleteProposal('${p.id}')" title="Sil">🗑️</button>` : ''}
     </td>
   </tr>`;
   }).join('');
@@ -3726,8 +4124,10 @@ function saveProposal(id) {
   if(id) {
     const idx = APP.data.proposals.findIndex(p=>p.id===id);
     if(idx>=0) APP.data.proposals[idx] = {...APP.data.proposals[idx], ...data};
+    logAction('update', 'proposal', `${data.businessName} - ${data.city||''}`);
   } else {
-    APP.data.proposals.push({id:uid(), ...data, createdBy:APP.currentUser?.name});
+    APP.data.proposals.push({id:uid(), ...data, createdBy:APP.currentUser?.name, personnelName:APP.currentUser?.name});
+    logAction('create', 'proposal', `${data.businessName} - ${data.city||''}`);
   }
 
   saveData(); closeModal(); renderProposals();
@@ -3735,11 +4135,129 @@ function saveProposal(id) {
 }
 
 function deleteProposal(id) {
+  const p = APP.data.proposals.find(x=>x.id===id);
+  if(!p) return;
+  if(!canDeleteRecord(p)) { toast('Bu kaydı silme yetkiniz yok. Sadece oluşturan kişi veya admin silebilir.','error'); return; }
   if(!confirm('Bu teklifi silmek istediğinize emin misiniz?')) return;
   APP.data.proposals = APP.data.proposals.filter(p=>p.id!==id);
   deleteFromFirestore('proposals', id);
+  logAction('delete', 'proposal', `${p.businessName} - ${p.city||''}`);
   saveData(); renderProposals();
   toast('Teklif silindi');
+}
+
+function buildProposalPDFHtml(p) {
+  const dateStr = formatDate(p.date);
+  const validUntil = p.followUpDate ? formatDate(p.followUpDate) : '';
+  const priceRows = [];
+  if(p.priceNakit) priceRows.push({label:'💵 Nakit Ödeme', price:p.priceNakit});
+  if(p.priceYakit) priceRows.push({label:'⛽ Yakıt Kartı (KDV Dahil)', price:p.priceYakit, net:(p.priceYakit/1.2).toFixed(2)});
+  if(p.priceFatura) priceRows.push({label:'📄 Faturalı (KDV Dahil)', price:p.priceFatura, net:(p.priceFatura/1.2).toFixed(2)});
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+  <style>
+    @page{size:A4;margin:20mm 15mm}
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Segoe UI',Arial,sans-serif;font-size:11px;color:#333;padding:20px}
+    .title-bar{background:linear-gradient(135deg,#1B2A4A,#2C3E6B);color:#fff;padding:12px 16px;border-radius:6px;text-align:center;margin:14px 0;font-size:16px;font-weight:700;letter-spacing:1px}
+    .info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+    .info-box{background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:12px}
+    .info-box label{font-size:9px;color:#888;text-transform:uppercase;letter-spacing:0.3px;display:block;margin-bottom:3px}
+    .info-box span{font-size:12px;font-weight:600;color:#333}
+    .price-table{width:100%;border-collapse:collapse;margin:16px 0}
+    .price-table th{background:#1B2A4A;color:#fff;padding:10px;text-align:left;font-size:11px}
+    .price-table td{padding:14px 10px;border-bottom:1px solid #eee;font-size:12px}
+    .price-table tr:nth-child(even) td{background:#fafafa}
+    .price-big{font-size:18px;font-weight:800;color:#2e7d32}
+    .price-net{font-size:10px;color:#888;margin-top:3px}
+    .intro{background:#fff3e0;border-left:4px solid #ff9800;padding:14px 16px;margin:14px 0;border-radius:4px;font-size:12px;line-height:1.6}
+    .sign-area{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:50px;text-align:center}
+    .sign-box{border-top:1px solid #333;padding-top:8px;font-size:10px;color:#555}
+    .notes{background:#f1f8e9;border:1px solid #c5e1a5;border-radius:6px;padding:12px;margin:12px 0;font-size:11px;line-height:1.6}
+    .valid{background:#e3f2fd;border:1px solid #90caf9;border-radius:6px;padding:10px;margin:12px 0;font-size:11px;text-align:center;color:#1976d2;font-weight:600}
+  </style></head><body>
+  ${pdfBaslik()}
+  <div class="title-bar">BİTKİSEL ATIK YAĞ ALIM TEKLİFİ</div>
+  <div class="info-grid">
+    <div class="info-box"><label>Teklif Tarihi</label><span>${dateStr}</span></div>
+    <div class="info-box"><label>İşletme</label><span>${p.businessName||'-'}</span></div>
+    <div class="info-box"><label>İl / İlçe</label><span>${(p.city||'-')+(p.district?' / '+p.district:'')}</span></div>
+    <div class="info-box"><label>Durum</label><span>${p.stage||'İlk Temas'}</span></div>
+  </div>
+
+  <div class="intro">
+    Sayın <strong>${p.businessName||'İşletme Yetkilisi'}</strong>,<br><br>
+    İşletmenizden toplanacak bitkisel atık yağlar için aşağıdaki fiyat tekliflerimizi sunarız. Teklifimiz seçeceğiniz ödeme şekline göre belirlenmiştir.
+  </div>
+
+  <h3 style="font-size:13px;margin-top:16px;margin-bottom:8px;color:#1B2A4A;">ÖDEME SEÇENEKLERİ VE FİYATLAR</h3>
+  <table class="price-table">
+    <thead><tr><th>Ödeme Şekli</th><th style="text-align:right;">Fiyat (₺/kg)</th></tr></thead>
+    <tbody>
+      ${priceRows.length ? priceRows.map(pr => `
+        <tr>
+          <td><strong>${pr.label}</strong></td>
+          <td style="text-align:right;">
+            <div class="price-big">${formatMoney(pr.price)}/kg</div>
+            ${pr.net ? '<div class="price-net">Net (KDV hariç): '+formatMoney(parseFloat(pr.net))+'/kg</div>' : ''}
+          </td>
+        </tr>
+      `).join('') : '<tr><td colspan="2" style="text-align:center;color:#999;padding:20px;">Henüz fiyat girilmemiş</td></tr>'}
+    </tbody>
+  </table>
+
+  ${validUntil ? `<div class="valid">⏰ Teklif Geçerlilik: ${validUntil}</div>` : ''}
+
+  ${p.note ? `<div class="notes"><strong>📝 Notlar:</strong><br>${p.note}</div>` : ''}
+
+  <div style="background:#f8f9fa;border-radius:6px;padding:14px;margin:14px 0;font-size:11px;line-height:1.7;">
+    <strong>📋 HİZMET KAPSAMI:</strong><br>
+    • Atık yağlar firmamız tarafından ücretsiz olarak toplanır<br>
+    • Tarafınıza yasal evraklar (teslim fişi, makbuz) düzenlenir<br>
+    • MoTAT (Mobil Atık Takip Sistemi) üzerinden gerekli kayıtlar oluşturulur<br>
+    • Lisanslı araçlarımız ile güvenli taşıma yapılır
+  </div>
+
+  <div class="sign-area">
+    <div><div style="height:60px;"></div><div class="sign-box">TEKLİFİ VEREN<br><strong>${FIRMA.adKisa||'EKOSA'}</strong></div></div>
+    <div><div style="height:60px;"></div><div class="sign-box">KABUL EDEN<br><strong>(İşletme Yetkilisi)</strong></div></div>
+  </div>
+
+  ${pdfAltBilgi()}
+  </body></html>`;
+}
+
+function viewProposalPDF(id) {
+  const p = APP.data.proposals.find(x=>x.id===id);
+  if(!p) return;
+  const html = buildProposalPDFHtml(p);
+  openPrintWindow(html);
+}
+
+async function shareProposalWhatsApp(id) {
+  const p = APP.data.proposals.find(x=>x.id===id);
+  if(!p) return;
+
+  let msg = `*BİTKİSEL ATIK YAĞ ALIM TEKLİFİ*\n\n`;
+  msg += `🏢 Sayın ${p.businessName},\n\n`;
+  msg += `İşletmenizden toplanacak bitkisel atık yağlar için fiyat teklifimiz:\n\n`;
+  if(p.priceNakit) msg += `💵 Nakit Ödeme: *${formatMoney(p.priceNakit)}/kg*\n`;
+  if(p.priceYakit) msg += `⛽ Yakıt Kartı: *${formatMoney(p.priceYakit)}/kg* (KDV Dahil)\n`;
+  if(p.priceFatura) msg += `📄 Faturalı: *${formatMoney(p.priceFatura)}/kg* (KDV Dahil)\n`;
+  msg += `\n📅 Teklif Tarihi: ${formatDate(p.date)}\n`;
+  if(p.followUpDate) msg += `⏰ Geçerlilik: ${formatDate(p.followUpDate)}\n`;
+  msg += `\n✅ Ücretsiz toplama\n✅ Yasal evrak düzenleme\n✅ MoTAT kaydı\n✅ Lisanslı araç\n\n`;
+  if(p.note) msg += `📝 ${p.note}\n\n`;
+  msg += `_${FIRMA.adKisa||'EKOSA'}_\n📞 ${FIRMA.tel||''}\n✉️ ${FIRMA.email||''}`;
+
+  if(navigator.share) {
+    try {
+      await navigator.share({ title: 'Teklif: ' + p.businessName, text: msg });
+      return;
+    } catch(e) { if(e.name === 'AbortError') return; }
+  }
+  const url = 'https://wa.me/?text=' + encodeURIComponent(msg);
+  window.open(url, '_blank');
 }
 
 // ============================================================
@@ -3783,10 +4301,11 @@ function renderReceipts() {
     <td>${payStatus}${payDetail?' '+payDetail:''}</td>
     <td style="white-space:nowrap;">
       ${remaining > 0 ? `<button class="btn btn-sm btn-primary" onclick="openAddPaymentModal('${r.id}')" title="Ödeme Ekle">💰</button>` : ''}
-      <button class="btn btn-sm btn-secondary" onclick="openEditReceiptModal('${r.id}')">✏️</button>
-      <button class="btn btn-sm btn-secondary" onclick="printReceiptRawBT('${r.id}')">🖨️</button>
+      ${canEditRecord(r) ? `<button class="btn btn-sm btn-secondary" onclick="openEditReceiptModal('${r.id}')" title="Düzenle">✏️</button>` : ''}
+      <button class="btn btn-sm btn-secondary" onclick="printReceiptRawBT('${r.id}')" title="Termal Yazdır">🖨️</button>
       <button class="btn btn-sm btn-secondary" onclick="generateTeslimFisiPDF('${r.id}')" title="PDF">📄</button>
-      <button class="btn btn-sm btn-danger" onclick="deleteReceipt('${r.id}')">🗑️</button>
+      <button class="btn btn-sm" style="background:#25D366;color:#fff;" onclick="shareReceiptWhatsApp('${r.id}')" title="WhatsApp Paylaş">📲</button>
+      ${canDeleteRecord(r) ? `<button class="btn btn-sm btn-danger" onclick="deleteReceipt('${r.id}')" title="Sil">🗑️</button>` : ''}
     </td>
   </tr>`;
   }).join('');
@@ -3811,9 +4330,11 @@ function renderReceipts() {
     <td>${t.city||'-'} / ${t.district||'-'}</td>
     <td>${formatMoney(t.amount)}</td>
     <td style="white-space:nowrap;">
-      <button class="btn btn-sm btn-secondary" onclick="openEditTediyeModal('${t.id}')">✏️</button>
-      <button class="btn btn-sm btn-primary" onclick="printTediyeRawBT('${t.id}')">🖨️</button>
-      <button class="btn btn-sm btn-danger" onclick="deleteTediye('${t.id}')">🗑️</button>
+      ${canEditRecord(t) ? `<button class="btn btn-sm btn-secondary" onclick="openEditTediyeModal('${t.id}')" title="Düzenle">✏️</button>` : ''}
+      <button class="btn btn-sm btn-primary" onclick="printTediyeRawBT('${t.id}')" title="Termal Yazdır">🖨️</button>
+      <button class="btn btn-sm btn-secondary" onclick="generateTediyeMakbuzPDF('${t.id}')" title="PDF">📄</button>
+      <button class="btn btn-sm" style="background:#25D366;color:#fff;" onclick="shareTediyeWhatsApp('${t.id}')" title="WhatsApp Paylaş">📲</button>
+      ${canDeleteRecord(t) ? `<button class="btn btn-sm btn-danger" onclick="deleteTediye('${t.id}')" title="Sil">🗑️</button>` : ''}
     </td>
   </tr>`).join('');
 }
@@ -3918,6 +4439,7 @@ function saveAddPayment(id) {
 function openEditReceiptModal(id) {
   const r = APP.data.receipts.find(x=>x.id===id);
   if(!r) return;
+  if(!canEditRecord(r)) { toast('Bu makbuzu düzenleme yetkiniz yok. Sadece oluşturan kişi veya admin düzenleyebilir.','error'); return; }
   const body = `
     <div class="form-row">
       <div class="form-group"><label class="form-label">Makbuz No</label><input class="form-input" id="mEditRecNo" value="${r.receiptNo}" readonly style="background:var(--bg);"></div>
@@ -3953,11 +4475,14 @@ function calcEditReceiptTotal() {
 function saveEditReceipt(id) {
   const idx = APP.data.receipts.findIndex(r=>r.id===id);
   if(idx<0) return;
+  const oldReceipt = {...APP.data.receipts[idx]};
+
   const customerId = document.getElementById('mEditRecCustomer').value;
   const customer = APP.data.customers.find(c=>c.id===customerId);
   const qty = parseFloat(document.getElementById('mEditRecQty').value)||0;
   const price = parseFloat(document.getElementById('mEditRecPrice').value)||0;
   const total = qty * price;
+
   APP.data.receipts[idx].date = document.getElementById('mEditRecDate').value;
   APP.data.receipts[idx].customerId = customerId;
   APP.data.receipts[idx].customerName = customer?.name||'';
@@ -3970,26 +4495,93 @@ function saveEditReceipt(id) {
   APP.data.receipts[idx].grandTotal = total;
   APP.data.receipts[idx].printType = document.getElementById('mEditRecPrintType').value;
 
-  saveData(); closeModal(); renderReceipts();
-  toast('Makbuz güncellendi');
+  // Adjust vehicle stock (remove old qty, add new qty)
+  if(oldReceipt.vehicleId) {
+    const oldV = APP.data.vehicles.find(x=>x.id===oldReceipt.vehicleId);
+    if(oldV) oldV.stock = Math.max(0, (oldV.stock||0) - (oldReceipt.quantity||0));
+  }
+  if(APP.data.receipts[idx].vehicleId) {
+    const newV = APP.data.vehicles.find(x=>x.id===APP.data.receipts[idx].vehicleId);
+    if(newV) newV.stock = (newV.stock||0) + qty;
+  }
+
+  // Update cari transactions linked to this receipt
+  APP.data.cariTransactions.forEach(t => {
+    if(t.description?.indexOf(oldReceipt.receiptNo)!==-1 && t.type === 'alim') {
+      t.customerId = customerId;
+      t.date = APP.data.receipts[idx].date;
+      t.description = 'Alım: ' + oldReceipt.receiptNo + ' (' + qty + ' kg)';
+      t.borc = total;
+    }
+  });
+
+  // Update linked visit
+  const relVisit = APP.data.visits.find(v => v.customerId===oldReceipt.customerId && v.date===oldReceipt.date && v.quantity===oldReceipt.quantity);
+  if(relVisit) {
+    relVisit.customerId = customerId;
+    relVisit.customerName = customer?.name||'';
+    relVisit.city = customer?.city||'';
+    relVisit.date = APP.data.receipts[idx].date;
+    relVisit.quantity = qty;
+    relVisit.price = price;
+  }
+
+  saveData();
+  closeModal();
+  renderReceipts();
+  renderVisits();
+  if(APP.currentPage === 'cariHesap') renderCariHesap();
+  toast('✅ Makbuz ve ilgili kayıtlar güncellendi');
 }
 
 // Edit Tediye Modal
 function openEditTediyeModal(id) {
   const t = APP.data.tediye.find(x=>x.id===id);
   if(!t) return;
+  if(!canEditRecord(t)) { toast('Bu tediyeyi düzenleme yetkiniz yok. Sadece oluşturan kişi veya admin düzenleyebilir.','error'); return; }
+
+  // Build datalist from paymentPersons + customers
+  const allPaymentPersons = [];
+  APP.data.customers.forEach(c => {
+    (c.paymentPersons||[]).forEach(pp => {
+      allPaymentPersons.push({
+        name: pp.name,
+        tc: pp.tc||'',
+        city: c.city||'',
+        district: c.district||'',
+        customerId: c.id,
+        customerName: c.name
+      });
+    });
+  });
+
   const body = `
     <div class="form-row">
       <div class="form-group"><label class="form-label">Makbuz No</label><input class="form-input" value="${t.tediyeNo}" readonly style="background:var(--bg);"></div>
       <div class="form-group"><label class="form-label">Tarih</label><input class="form-input" type="date" id="mEditTedDate" value="${t.date||''}"></div>
     </div>
+    <div class="form-group">
+      <label class="form-label">İşletme (cariden seçin)</label>
+      <select class="form-select" id="mEditTedCustomer" onchange="onTediyeCustomerChange()">
+        <option value="">-- İşletme seç --</option>
+        ${APP.data.customers.map(c=>`<option value="${c.id}" ${t.customerId===c.id?'selected':''}>${c.name} (${c.city||''})</option>`).join('')}
+      </select>
+    </div>
     <div class="form-row">
-      <div class="form-group"><label class="form-label">Ad Soyad *</label><input class="form-input" id="mEditTedName" value="${t.personName||''}"></div>
+      <div class="form-group"><label class="form-label">Ad Soyad *</label>
+        <input class="form-input" id="mEditTedName" value="${t.personName||''}" list="mEditTedNameList" autocomplete="off" oninput="onTediyeNameInput()">
+        <datalist id="mEditTedNameList">
+          ${allPaymentPersons.map(p=>`<option value="${p.name}">${p.customerName} — ${p.city}</option>`).join('')}
+        </datalist>
+      </div>
       <div class="form-group"><label class="form-label">TC Kimlik</label><input class="form-input" id="mEditTedTC" value="${t.personTC||''}" maxlength="11"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Tutar (₺)</label><input class="form-input" type="number" step="0.01" id="mEditTedAmount" value="${t.amount||0}"></div>
-      <div class="form-group"><label class="form-label">İl/İlçe</label><input class="form-input" id="mEditTedCity" value="${(t.city||'')+(t.district?' / '+t.district:'')}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">İl</label><input class="form-input" id="mEditTedCityOnly" value="${t.city||''}"></div>
+      <div class="form-group"><label class="form-label">İlçe</label><input class="form-input" id="mEditTedDistrict" value="${t.district||''}"></div>
     </div>
   `;
   openModal('Tediye Düzenle — ' + t.tediyeNo, body, `
@@ -3998,18 +4590,70 @@ function openEditTediyeModal(id) {
   `);
 }
 
+function onTediyeCustomerChange() {
+  const customerId = document.getElementById('mEditTedCustomer')?.value;
+  if(!customerId) return;
+  const c = APP.data.customers.find(x=>x.id===customerId);
+  if(!c) return;
+  // Auto-fill city and district
+  document.getElementById('mEditTedCityOnly').value = c.city||'';
+  document.getElementById('mEditTedDistrict').value = c.district||'';
+  // If customer has a payment person, pre-select the first one
+  const pp = c.paymentPersons?.[0];
+  if(pp && !document.getElementById('mEditTedName').value) {
+    document.getElementById('mEditTedName').value = pp.name||'';
+    document.getElementById('mEditTedTC').value = pp.tc||'';
+  }
+}
+
+function onTediyeNameInput() {
+  const name = document.getElementById('mEditTedName').value.trim();
+  if(!name) return;
+  // Find customer with this payment person
+  for(const c of APP.data.customers) {
+    const pp = (c.paymentPersons||[]).find(p => p.name && p.name.toLowerCase() === name.toLowerCase());
+    if(pp) {
+      document.getElementById('mEditTedCustomer').value = c.id;
+      document.getElementById('mEditTedCityOnly').value = c.city||'';
+      document.getElementById('mEditTedDistrict').value = c.district||'';
+      if(pp.tc && !document.getElementById('mEditTedTC').value) {
+        document.getElementById('mEditTedTC').value = pp.tc;
+      }
+      return;
+    }
+  }
+}
+
 function saveEditTediye(id) {
   const idx = APP.data.tediye.findIndex(t=>t.id===id);
   if(idx<0) return;
-  APP.data.tediye[idx].date = document.getElementById('mEditTedDate').value;
+  const oldT = {...APP.data.tediye[idx]};
+  const newAmount = parseFloat(document.getElementById('mEditTedAmount').value)||0;
+  const newDate = document.getElementById('mEditTedDate').value;
+  const customerId = document.getElementById('mEditTedCustomer')?.value;
+
+  APP.data.tediye[idx].date = newDate;
   APP.data.tediye[idx].personName = document.getElementById('mEditTedName').value.trim();
   APP.data.tediye[idx].personTC = document.getElementById('mEditTedTC').value.trim();
-  APP.data.tediye[idx].amount = parseFloat(document.getElementById('mEditTedAmount').value)||0;
-  const cityParts = document.getElementById('mEditTedCity').value.split('/').map(s=>s.trim());
-  APP.data.tediye[idx].city = cityParts[0]||'';
-  APP.data.tediye[idx].district = cityParts[1]||'';
-  saveData(); closeModal(); renderReceipts();
-  toast('Tediye güncellendi');
+  APP.data.tediye[idx].amount = newAmount;
+  APP.data.tediye[idx].city = document.getElementById('mEditTedCityOnly')?.value?.trim() || '';
+  APP.data.tediye[idx].district = document.getElementById('mEditTedDistrict')?.value?.trim() || '';
+  if(customerId) APP.data.tediye[idx].customerId = customerId;
+
+  // Update cari transactions linked to this tediye
+  APP.data.cariTransactions.forEach(t => {
+    if(t.tediyeId === id || t.description?.indexOf(oldT.tediyeNo)!==-1) {
+      t.date = newDate;
+      t.alacak = newAmount;
+      if(customerId) t.customerId = customerId;
+    }
+  });
+
+  saveData();
+  closeModal();
+  renderReceipts();
+  if(APP.currentPage === 'cariHesap') renderCariHesap();
+  toast('✅ Tediye ve cari hareket güncellendi');
 }
 
 // RawBT Print Functions - generates receipt HTML and opens via RawBT intent
@@ -4079,8 +4723,7 @@ function generateReceiptHTML(id, size) {
     txt += ' Teslim Eden              Teslim Alan\n';
     txt += ' (Isletme)                 (Ekosa)\n\n\n';
     txt += ' _____________________   _____________________\n';
-    txt += ' '+(r.customerName||'').substring(0,22)+'\n';
-    txt += ' '+(r.personnelName||'').substring(0,22)+'\n\n';
+    txt += ' '+((r.customerName||'').substring(0,22)).padEnd(25)+(r.personnelName||'').substring(0,22)+'\n\n';
     txt += da+'\n';
     txt += ' Isbu fis ile tarafiniza; 06/06/2015 tarihli\n';
     txt += ' Bitkisel Atik Yaglarin Kontrolu Yonetmeligi\n';
@@ -4128,8 +4771,7 @@ function generateReceiptHTML(id, size) {
     txt += ' Teslim Eden      Teslim Alan\n';
     txt += ' (Isletme)         (Ekosa)\n\n\n';
     txt += ' _____________   _____________\n';
-    txt += ' '+(r.customerName||'').substring(0,15)+'\n';
-    txt += ' '+(r.personnelName||'').substring(0,15)+'\n\n';
+    txt += ' '+((r.customerName||'').substring(0,13)).padEnd(16)+(r.personnelName||'').substring(0,13)+'\n\n';
     txt += da+'\n';
     txt += ' Isbu fis ile tarafiniza;\n';
     txt += ' 06/06/2015 tarihli Bitkisel\n';
@@ -4176,7 +4818,7 @@ function generateTediyeHTML(id, size) {
     txt += 'Odemeyi Alan Kisi:\n';
     txt += 'Ad Soyad  : '+(t.personName||'')+'\n';
     txt += 'T.C. No   : '+(t.personTC||'')+'\n';
-    txt += 'Adres     : '+(t.city||'')+'\n';
+    txt += 'Adres     : '+((t.city||'')+(t.district?' / '+t.district:''))+'\n';
     txt += da+'\n';
     txt += 'Mal/Hizmet Cinsi:\n';
     txt += '  BITKISEL ATIK YAG BEDELI\n';
@@ -4190,8 +4832,7 @@ function generateTediyeHTML(id, size) {
     txt += 'Teslim Eden      Teslim Alan\n';
     txt += '  (Ekosa)        (Alici Kisi)\n\n\n';
     txt += '_______________  _____________\n';
-    txt += (FIRMA.adKisa||'Ekosa').substring(0,15)+'\n';
-    txt += (t.personName||'').substring(0,15)+'\n';
+    txt += 'EKOSA'.padEnd(17)+(t.personName||'').substring(0,15)+'\n';
     txt += eq+'\n';
   } else {
     txt += '     EKOSA CEVRE COZUMLERI\n';
@@ -4207,7 +4848,7 @@ function generateTediyeHTML(id, size) {
     txt += 'Odemeyi Alan Kisi:\n';
     txt += 'Ad Soyad  : '+(t.personName||'')+'\n';
     txt += 'T.C. No   : '+(t.personTC||'')+'\n';
-    txt += 'Adres     : '+(t.city||'')+'\n';
+    txt += 'Adres     : '+((t.city||'')+(t.district?' / '+t.district:''))+'\n';
     txt += da+'\n';
     txt += 'Mal/Hizmet Cinsi:\n';
     txt += '  BITKISEL ATIK YAG BEDELI\n';
@@ -4221,13 +4862,23 @@ function generateTediyeHTML(id, size) {
     txt += 'Teslim Eden    Teslim Alan\n';
     txt += '  (Ekosa)      (Alici)\n\n\n';
     txt += '_____________  _____________\n';
-    txt += (FIRMA.adKisa||'Ekosa').substring(0,13)+'\n';
-    txt += (t.personName||'').substring(0,13)+'\n';
+    txt += 'EKOSA'.padEnd(15)+(t.personName||'').substring(0,13)+'\n';
     txt += eq+'\n';
   }
   const width = is80 ? '72mm' : '48mm';
   const fs = is80 ? '11px' : '9px';
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>@page{margin:0;size:${width} auto}*{margin:0;padding:0}body{width:${width};padding:1mm}pre{font-family:'Courier New',monospace;font-size:${fs};white-space:pre;line-height:1.3;color:#000}</style></head><body><pre>${txt}</pre></body></html>`;
+}
+
+function turkishToAscii(s) {
+  if(!s) return '';
+  return String(s)
+    .replace(/ğ/g,'g').replace(/Ğ/g,'G')
+    .replace(/ü/g,'u').replace(/Ü/g,'U')
+    .replace(/ş/g,'s').replace(/Ş/g,'S')
+    .replace(/ı/g,'i').replace(/İ/g,'I')
+    .replace(/ö/g,'o').replace(/Ö/g,'O')
+    .replace(/ç/g,'c').replace(/Ç/g,'C');
 }
 
 function openRawBTPrint(html) {
@@ -4240,6 +4891,9 @@ function openRawBTPrint(html) {
     // Fallback: strip all HTML tags
     plainText = html.replace(/<[^>]*>/g, '');
   }
+  
+  // Convert Turkish chars to ASCII for thermal printer compatibility
+  plainText = turkishToAscii(plainText);
   
   try {
     // RawBT: send PLAIN TEXT only (not HTML with DOCTYPE)
@@ -4865,11 +5519,11 @@ function renderFuelCards() {
   const searchQ = (document.getElementById('fuelCardSearchInput')?.value||'').toLowerCase().trim();
   let cardsCustomers = APP.data.customers.filter(c=>c.fuelCardNo);
   if(searchQ) cardsCustomers = cardsCustomers.filter(c=> c.fuelCardNo.toLowerCase().includes(searchQ) || c.name.toLowerCase().includes(searchQ) || (c.city||'').toLowerCase().includes(searchQ));
-  tbody.innerHTML = cardsCustomers.map(c => `<tr>
-    <td>${c.name}</td>
+  tbody.innerHTML = cardsCustomers.map(c => `<tr style="cursor:pointer;" onclick="openCustomerFromDashboard('${c.id}')" title="Cari hesabı aç">
+    <td><strong>${c.name}</strong> <span style="font-size:10px;color:var(--text-light);">${c.city||''}</span></td>
     <td><code style="font-size:14px;font-weight:600;">${c.fuelCardNo}</code></td>
     <td>-</td>
-    <td>
+    <td onclick="event.stopPropagation();">
       <button class="btn btn-sm btn-primary" onclick="loadFuelCard('${c.fuelCardNo}')">Yükle</button>
     </td>
   </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--text-light);">Yakıt kartı kayıtlı müşteri yok</td></tr>';
@@ -4939,6 +5593,16 @@ function cariClearSelection() {
   renderCariHesap();
 }
 
+function editSelectedCariCustomer() {
+  const customerId = document.getElementById('cariSelectedCustomerId')?.value;
+  if(!customerId) { toast('Önce bir işletme seçin','error'); return; }
+  if(typeof openCustomerModal === 'function') {
+    openCustomerModal(customerId);
+  } else {
+    toast('Müşteri düzenleme modalı bulunamadı','error');
+  }
+}
+
 document.addEventListener('click', function(e) {
   const si = document.getElementById('cariSearchInput');
   const sr = document.getElementById('cariSearchResults');
@@ -4982,6 +5646,29 @@ function renderCariHesap() {
   let runningDebt = 0; // positive = we owe them, negative = they owe us
   const rows = txs.map(t => {
     runningDebt += (t.borc||0) - (t.alacak||0);
+    // Find linked receipt or tediye
+    let linkedReceipt = null, linkedTediye = null;
+    if(t.description) {
+      const recMatch = t.description.match(/EKS-\d+/);
+      if(recMatch) linkedReceipt = APP.data.receipts.find(r => r.receiptNo === recMatch[0]);
+      const tedMatch = t.description.match(/TED-\d+|MK-\d+/);
+      if(tedMatch) linkedTediye = APP.data.tediye.find(x => x.tediyeNo === tedMatch[0]);
+    }
+    if(!linkedTediye && t.tediyeId) linkedTediye = APP.data.tediye.find(x => x.id === t.tediyeId);
+
+    let actionBtns = '';
+    if(linkedReceipt) {
+      actionBtns = `<button class="btn btn-sm btn-secondary" onclick="openEditReceiptModal('${linkedReceipt.id}')" title="Makbuzu düzenle">✏️</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteReceipt('${linkedReceipt.id}')" title="Makbuzu sil">🗑️</button>`;
+    } else if(linkedTediye) {
+      actionBtns = `<button class="btn btn-sm btn-secondary" onclick="openEditTediyeModal('${linkedTediye.id}')" title="Tediye düzenle">✏️</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteTediye('${linkedTediye.id}')" title="Tediye sil">🗑️</button>`;
+    } else {
+      // Manual cari transaction
+      actionBtns = `<button class="btn btn-sm btn-secondary" onclick="openEditManualCariModal('${t.id}')" title="Manuel kayıt düzenle">✏️</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteManualCari('${t.id}')" title="Kaydı sil">🗑️</button>`;
+    }
+
     return `<tr>
       <td>${formatDate(t.date)}</td>
       <td>${t.type==='alim'?'📦 Alım':t.type==='odeme'?'💰 Ödeme':'🔧 Düzeltme'}</td>
@@ -4989,6 +5676,7 @@ function renderCariHesap() {
       <td style="color:var(--danger);font-weight:${t.borc?'600':'400'};">${t.borc?formatMoney(t.borc):'-'}</td>
       <td style="color:var(--success);font-weight:${t.alacak?'600':'400'};">${t.alacak?formatMoney(t.alacak):'-'}</td>
       <td style="font-weight:600;color:${runningDebt>0?'var(--danger)':runningDebt<0?'var(--success)':'var(--text)'};">${formatMoney(Math.abs(runningDebt))} ${runningDebt>0?'(B)':runningDebt<0?'(A)':''}</td>
+      <td style="white-space:nowrap;">${actionBtns}</td>
     </tr>`;
   });
 
@@ -5049,6 +5737,53 @@ function saveCariManual() {
 
   saveData(); closeModal(); renderCariHesap();
   toast('Düzeltme kaydedildi');
+}
+
+function openEditManualCariModal(id) {
+  const t = APP.data.cariTransactions.find(x=>x.id===id);
+  if(!t) return;
+  const type = t.borc > 0 ? 'borc' : 'alacak';
+  const amount = t.borc > 0 ? t.borc : t.alacak;
+  const body = `
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Tarih</label><input class="form-input" type="date" id="mEditCariDate" value="${t.date||''}"></div>
+      <div class="form-group"><label class="form-label">Tür</label>
+        <select class="form-select" id="mEditCariType">
+          <option value="borc" ${type==='borc'?'selected':''}>Borç (İşletmeye)</option>
+          <option value="alacak" ${type==='alacak'?'selected':''}>Alacak (Ödeme)</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Tutar (₺)</label><input class="form-input" type="number" step="0.01" id="mEditCariAmount" value="${amount}"></div>
+    <div class="form-group"><label class="form-label">Açıklama</label><input class="form-input" id="mEditCariDesc" value="${t.description||''}"></div>
+  `;
+  openModal('Cari Kayıt Düzenle', body, `
+    <button class="btn btn-secondary" onclick="closeModal()">İptal</button>
+    <button class="btn btn-primary" onclick="saveEditManualCari('${id}')">Kaydet</button>
+  `);
+}
+
+function saveEditManualCari(id) {
+  const idx = APP.data.cariTransactions.findIndex(t=>t.id===id);
+  if(idx<0) return;
+  const type = document.getElementById('mEditCariType').value;
+  const amount = parseFloat(document.getElementById('mEditCariAmount').value)||0;
+  APP.data.cariTransactions[idx].date = document.getElementById('mEditCariDate').value;
+  APP.data.cariTransactions[idx].description = document.getElementById('mEditCariDesc').value;
+  APP.data.cariTransactions[idx].borc = type==='borc'?amount:0;
+  APP.data.cariTransactions[idx].alacak = type==='alacak'?amount:0;
+  saveData(); closeModal(); renderCariHesap();
+  toast('✅ Cari kayıt güncellendi');
+}
+
+function deleteManualCari(id) {
+  const t = APP.data.cariTransactions.find(x=>x.id===id);
+  if(!t) return;
+  if(!confirm(`Bu cari kaydı silmek istediğinize emin misiniz?\n\nTarih: ${formatDate(t.date)}\nAçıklama: ${t.description||'-'}\nBorç: ${formatMoney(t.borc||0)} | Alacak: ${formatMoney(t.alacak||0)}`)) return;
+  APP.data.cariTransactions = APP.data.cariTransactions.filter(x=>x.id!==id);
+  deleteFromFirestore('cariTransactions', id);
+  saveData(); renderCariHesap();
+  toast('✅ Cari kayıt silindi');
 }
 
 // ============================================================
@@ -5654,6 +6389,62 @@ function renderAdmin() {
   switchAdminTab('users');
 }
 
+function renderAuditLogTable() {
+  const tbody = document.getElementById('auditLogBody');
+  if(!tbody) return;
+  const searchQ = (document.getElementById('logSearchInput')?.value||'').toLowerCase().trim();
+  const actionF = document.getElementById('logActionFilter')?.value || '';
+  let logs = [...(APP.data.actionLog||[])];
+  
+  if(searchQ) logs = logs.filter(l =>
+    (l.user||'').toLowerCase().includes(searchQ) ||
+    (l.entity||'').toLowerCase().includes(searchQ) ||
+    (l.details||'').toLowerCase().includes(searchQ)
+  );
+  if(actionF) logs = logs.filter(l => l.action === actionF);
+  
+  logs = logs.slice(0, 500);
+  const actionBadge = {
+    create: '<span style="background:#e8f5e9;color:#2e7d32;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;">➕ EKLEME</span>',
+    update: '<span style="background:#e3f2fd;color:#1976d2;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;">✏️ DÜZENLEME</span>',
+    delete: '<span style="background:#ffebee;color:#c62828;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;">🗑️ SİLME</span>'
+  };
+  const entityLabels = {customer:'Müşteri', receipt:'Makbuz', tediye:'Tediye', visit:'Ziyaret', proposal:'Teklif', vehicle:'Araç', urgent:'Acil Talep'};
+
+  tbody.innerHTML = logs.map(l => {
+    const dt = new Date(l.ts);
+    const dateStr = dt.toLocaleDateString('tr-TR') + ' ' + dt.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+    return `<tr>
+      <td style="white-space:nowrap;">${dateStr}</td>
+      <td><strong>${l.user||'-'}</strong></td>
+      <td>${actionBadge[l.action]||l.action}</td>
+      <td>${entityLabels[l.entity]||l.entity}</td>
+      <td style="font-size:11px;">${l.details||'-'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--text-light);padding:20px;">Kayıt bulunamadı</td></tr>';
+}
+
+function exportAuditLog() {
+  const logs = APP.data.actionLog || [];
+  if(!logs.length) { toast('Log kaydı yok','info'); return; }
+  const csv = ['Tarih,Saat,Kullanıcı,İşlem,Kayıt Türü,Detay'];
+  logs.forEach(l => {
+    const dt = new Date(l.ts);
+    const date = dt.toLocaleDateString('tr-TR');
+    const time = dt.toLocaleTimeString('tr-TR');
+    const row = [date, time, l.user, l.action, l.entity, (l.details||'').replace(/,/g,';').replace(/\n/g,' ')];
+    csv.push(row.map(v => '"'+(v||'')+'"').join(','));
+  });
+  const blob = new Blob(['\uFEFF'+csv.join('\n')], { type:'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'ekosa_log_'+today()+'.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Log dosyası indirildi');
+}
+
 function switchAdminTab(tab) {
   document.querySelectorAll('#page-admin .tab').forEach(t=>t.classList.remove('active'));
   event?.target?.classList.add('active');
@@ -5793,6 +6584,60 @@ function switchAdminTab(tab) {
         </div>
       </div>
     `;
+  }
+  else if(tab==='auditLog') {
+    const logs = (APP.data.actionLog||[]).slice(0, 500); // show last 500
+    const actionLabels = {create:'➕ Ekleme', update:'✏️ Düzenleme', delete:'🗑️ Silme'};
+    const entityLabels = {customer:'Müşteri', receipt:'Makbuz', tediye:'Tediye', visit:'Ziyaret', proposal:'Teklif', vehicle:'Araç', urgent:'Acil Talep'};
+    
+    // Group by user for summary
+    const userStats = {};
+    logs.forEach(l => {
+      if(!userStats[l.user]) userStats[l.user] = {total:0, create:0, update:0, delete:0};
+      userStats[l.user].total++;
+      if(l.action === 'create') userStats[l.user].create++;
+      else if(l.action === 'update') userStats[l.user].update++;
+      else if(l.action === 'delete') userStats[l.user].delete++;
+    });
+    const userStatsHtml = Object.entries(userStats).sort((a,b)=>b[1].total-a[1].total).map(([u,s]) => `
+      <div style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid var(--border);font-size:12px;">
+        <strong>${u}</strong>
+        <span><span style="color:var(--success);">➕${s.create}</span> <span style="color:var(--info);">✏️${s.update}</span> <span style="color:var(--danger);">🗑️${s.delete}</span> = <strong>${s.total}</strong></span>
+      </div>`).join('') || '<div style="padding:12px;color:var(--text-light);">Henüz log kaydı yok</div>';
+    
+    content.innerHTML = `
+      <div class="widget" style="margin-top:20px;">
+        <div class="widget-header"><div class="widget-title">📊 Kullanıcı İstatistikleri (Son 30 Gün)</div></div>
+        <div class="widget-body" style="padding:0;">${userStatsHtml}</div>
+      </div>
+      
+      <div class="widget" style="margin-top:16px;">
+        <div class="widget-header">
+          <div class="widget-title">📋 İşlem Kayıtları (Son 500 Kayıt)</div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input class="form-input" id="logSearchInput" oninput="renderAuditLogTable()" placeholder="🔍 Kullanıcı veya işlem ara..." style="min-width:180px;font-size:12px;padding:6px 10px;">
+            <select class="form-select" id="logActionFilter" onchange="renderAuditLogTable()" style="font-size:12px;padding:6px 10px;">
+              <option value="">Tüm İşlemler</option>
+              <option value="create">➕ Ekleme</option>
+              <option value="update">✏️ Düzenleme</option>
+              <option value="delete">🗑️ Silme</option>
+            </select>
+            <button class="btn btn-sm btn-secondary" onclick="exportAuditLog()">📥 Excel</button>
+          </div>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table" style="font-size:12px;">
+            <thead><tr><th>Tarih/Saat</th><th>Kullanıcı</th><th>İşlem</th><th>Kayıt Türü</th><th>Detay</th></tr></thead>
+            <tbody id="auditLogBody"></tbody>
+          </table>
+        </div>
+      </div>
+      
+      <div style="margin-top:12px;font-size:11px;color:var(--text-light);">
+        ℹ️ Loglar sadece 30 gün süresince saklanır, daha eski kayıtlar otomatik olarak silinir. Loglar tüm cihazlar arasında senkronize edilir.
+      </div>
+    `;
+    renderAuditLogTable();
   }
   else if(tab==='dataMigration') {
     const oldDataExists = !!localStorage.getItem('ekosa_crm_data');
