@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="(async()=>{let r=['=== Tanılama v14.6 ===','Firebase ready: '+(typeof isFirebaseReady!=='undefined'?isFirebaseReady:'TANIMSIZ'),'Online: '+navigator.onLine,'db obj: '+(typeof db),'auth obj: '+(typeof auth),'APP obj: '+(typeof APP)];try{if(typeof APP!=='undefined'&&APP.currentUser){r.push('User: '+APP.currentUser.email)}else{r.push('User: YOK')}if(typeof APP!=='undefined'&&APP.data){r.push('Local müşteri: '+APP.data.customers.length);r.push('Local araç: '+APP.data.vehicles.length);APP.data.vehicles.forEach(v=>r.push(' 🚛 '+v.plate))}}catch(e){r.push('APP err: '+e.message)}if(typeof db!=='undefined'&&db){try{await db.collection('_test').doc('p').set({t:Date.now()});r.push('✅ YAZMA OK')}catch(e){r.push('❌ YAZMA: '+e.code+' '+e.message)}try{const s=await db.collection('vehicles').get();r.push('Firebase araç: '+s.size);s.docs.forEach(d=>r.push(' 🚛 '+(d.data().plate||d.id)))}catch(e){r.push('❌ OKUMA: '+e.code+' '+e.message)}}else{r.push('db YOK - Firebase yüklenemedi!')}alert(r.join('\n'))})()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v15.7</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v15.9</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -778,6 +778,11 @@ input, select, textarea, button { font-family: var(--font); }
                 <div style="display:flex;gap:8px;margin-bottom:16px;">
                   <button class="btn btn-primary" id="foBtnCollected" onclick="foSetCollected(true)" style="flex:1;padding:16px;font-size:15px;">✅ Alım Yapıldı</button>
                   <button class="btn btn-secondary" id="foBtnNotCollected" onclick="foSetCollected(false)" style="flex:1;padding:16px;font-size:15px;">❌ Alım Yapılmadı</button>
+                </div>
+                <!-- Tarih Seçimi -->
+                <div class="form-group" style="margin-bottom:14px;">
+                  <label class="form-label">📅 İşlem Tarihi <span style="font-weight:400;color:var(--text-light);font-size:10px;">(geçmişe dönük giriş için değiştirin)</span></label>
+                  <input class="form-input" type="date" id="foDate" style="padding:10px 14px;font-size:14px;">
                 </div>
 
                 <!-- Alım Yapıldı Formu -->
@@ -3048,10 +3053,15 @@ function openCustomerModal(id) {
     <div class="form-group"><label class="form-label">Adres</label><textarea class="form-textarea" id="mCustAddress" rows="2">${c?.address||''}</textarea></div>
     <div class="form-group">
       <label class="form-label">🏢 Bağlı Olduğu Ana Firma <span style="font-weight:400;color:var(--text-light);font-size:10px;">(opsiyonel — cari hesap ana firmaya yazılır)</span></label>
-      <select class="form-select" id="mCustParentId">
-        <option value="">— Bağımsız İşletme —</option>
-        ${APP.data.customers.filter(x => !x.parentId && x.id !== c?.id).map(x => `<option value="${x.id}" ${c?.parentId===x.id?'selected':''}>${x.name} (${x.city||''})</option>`).join('')}
-      </select>
+      <div style="position:relative;">
+        <input class="form-input" id="mCustParentSearch" placeholder="🔍 Ana firma ara veya boş bırak..." 
+          value="${c?.parentId ? (APP.data.customers.find(x=>x.id===c.parentId)?.name||'')+' ('+((APP.data.customers.find(x=>x.id===c.parentId)?.city)||'')+')' : ''}"
+          oninput="filterParentList()" onfocus="filterParentList()" autocomplete="off">
+        <input type="hidden" id="mCustParentId" value="${c?.parentId||''}">
+        <div id="parentSearchResults" style="display:none;position:absolute;top:100%;left:0;right:0;background:white;border:1px solid var(--border);border-radius:0 0 6px 6px;max-height:200px;overflow-y:auto;z-index:100;box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+        </div>
+      </div>
+      ${c?.parentId ? `<div style="margin-top:4px;font-size:10px;"><a href="#" onclick="clearParentSelection();return false;" style="color:var(--danger);">✕ Bağlantıyı kaldır</a></div>` : ''}
     </div>
     <div class="form-row-3">
       <div class="form-group"><label class="form-label">Müşteri Tipi</label>
@@ -3144,6 +3154,54 @@ function togglePassiveFields() {
   const chk = document.getElementById('mCustIsPassive');
   const fields = document.getElementById('passiveFields');
   if(fields) fields.style.display = chk?.checked ? '' : 'none';
+}
+
+function filterParentList() {
+  const input = document.getElementById('mCustParentSearch');
+  const results = document.getElementById('parentSearchResults');
+  const hidden = document.getElementById('mCustParentId');
+  if(!input || !results) return;
+  
+  const q = input.value.toLowerCase().trim();
+  // Clear hidden if user is typing (not yet selected)
+  hidden.value = '';
+  
+  const currentCustId = document.querySelector('#modalContainer [onclick*="saveCustomer"]')?.getAttribute('onclick')?.match(/'([^']+)'/)?.[1] || '';
+  
+  let candidates = APP.data.customers.filter(x => !x.parentId && x.id !== currentCustId && !x.isPassive);
+  if(q) candidates = candidates.filter(x => 
+    x.name.toLowerCase().includes(q) || (x.city||'').toLowerCase().includes(q) || (x.district||'').toLowerCase().includes(q)
+  );
+  candidates = candidates.slice(0, 15);
+  
+  if(!q && !candidates.length) { results.style.display = 'none'; return; }
+  
+  results.innerHTML = `
+    <div style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text-light);border-bottom:1px solid var(--border);" 
+      onmousedown="selectParent('','');event.preventDefault();">— Bağımsız İşletme (bağlantı yok) —</div>
+    ${candidates.map(x => `
+      <div style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--border);" 
+        onmousedown="selectParent('${x.id}','${x.name.replace(/'/g,"\\'")} (${x.city||''})');event.preventDefault();"
+        onmouseover="this.style.background='var(--bg)'" onmouseout="this.style.background='white'">
+        <strong>${x.name}</strong> <span style="color:var(--text-light);">${x.city||''} ${x.district||''}</span>
+      </div>
+    `).join('')}
+  `;
+  results.style.display = '';
+  
+  // Hide on blur with delay
+  input.onblur = () => setTimeout(() => { if(results) results.style.display = 'none'; }, 200);
+}
+
+function selectParent(id, label) {
+  document.getElementById('mCustParentId').value = id;
+  document.getElementById('mCustParentSearch').value = label;
+  document.getElementById('parentSearchResults').style.display = 'none';
+}
+
+function clearParentSelection() {
+  document.getElementById('mCustParentId').value = '';
+  document.getElementById('mCustParentSearch').value = '';
 }
 
 function addPaymentPerson() {
@@ -3338,6 +3396,9 @@ function foSelectCustomer(id) {
   document.getElementById('fo-step3').style.display = 'none';
   document.getElementById('fo-complete').style.display = 'none';
 
+  // Set date to today
+  document.getElementById('foDate').value = today();
+
   // Fill customer info
   document.getElementById('foSelName').textContent = c.name;
   const rem = getRemainingDays(c);
@@ -3459,9 +3520,10 @@ function foSaveCollection() {
   // Create receipt
   APP.data.receiptCounter++;
   const receiptNo = 'EKS-' + String(APP.data.receiptCounter).padStart(4,'0');
+  const foDate = document.getElementById('foDate')?.value || today();
 
   const receipt = {
-    id: uid(), receiptNo, date: today(),
+    id: uid(), receiptNo, date: foDate,
     customerId: c.id, customerName: c.name,
     city: c.city||'', district: c.district||'',
     quantity: qty, unitPrice: price, total: subtotal, kdv: 0, grandTotal: subtotal,
@@ -3479,7 +3541,7 @@ function foSaveCollection() {
   // Create visit (GPS will be added later to not block UI)
   const visit = {
     id: uid(), customerId: c.id, customerName: c.name,
-    city: c.city||'', date: today(), collected: true,
+    city: c.city||'', date: foDate, collected: true,
     quantity: qty, price, fillLevel:'', reason:'',
     note: document.getElementById('foNote').value||'',
     vehicleId: vehicleId||null, vehiclePlate: vehicle?.plate||'',
@@ -3495,12 +3557,12 @@ function foSaveCollection() {
 
   // Update customer
   const custIdx = APP.data.customers.findIndex(x=>x.id===c.id);
-  if(custIdx>=0) APP.data.customers[custIdx].lastVisit = today();
+  if(custIdx>=0) APP.data.customers[custIdx].lastVisit = foDate;
 
   // Cari borç (KDV dahil fiyat, ek KDV yok) — ana firma varsa ona yazılır
   const cariCustId = getCariCustomerId(c.id);
   APP.data.cariTransactions.push({
-    id:uid(), customerId:cariCustId, sourceCustomerId:c.id, date:today(), type:'alim',
+    id:uid(), customerId:cariCustId, sourceCustomerId:c.id, date:foDate, type:'alim',
     description:'Alım: '+receiptNo+' ('+qty+' kg)'+(cariCustId!==c.id?' ['+c.name+']':''), borc:subtotal, alacak:0
   });
 
@@ -3597,10 +3659,11 @@ function foSaveNotCollected() {
   const c = foState.selectedCustomer;
   if(!c) return;
   if(!foState.fillLevel) { toast('Doluluk oranı seçin','error'); return; }
+  const foDate = document.getElementById('foDate')?.value || today();
 
   const visit = {
     id: uid(), customerId: c.id, customerName: c.name,
-    city: c.city||'', date: today(), collected: false,
+    city: c.city||'', date: foDate, collected: false,
     quantity: 0, price: 0,
     fillLevel: foState.fillLevel,
     reason: document.getElementById('foNotCollectedReason').value||'',
@@ -3615,16 +3678,14 @@ function foSaveNotCollected() {
   // Update customer next visit based on fill level
   const custIdx = APP.data.customers.findIndex(x=>x.id===c.id);
   if(custIdx>=0) {
-    APP.data.customers[custIdx].lastVisit = today();
+    APP.data.customers[custIdx].lastVisit = foDate;
     if(c.type === 'periodic' && c.period) {
       const fillMap = {'%0':1, '%25':0.75, '%50':0.5, '%75':0.25, '%100':0.1};
       const multiplier = fillMap[foState.fillLevel] || 1;
-      // We don't actually override period, we adjust lastVisit logic
-      // The next visit calc uses lastVisit + period, so we need to adjust
       const adjustedDays = Math.round(c.period * multiplier);
-      const fakeLastVisit = new Date();
-      fakeLastVisit.setDate(fakeLastVisit.getDate() - (c.period - adjustedDays));
-      APP.data.customers[custIdx].lastVisit = fakeLastVisit.toISOString().split('T')[0];
+      const baseDate = new Date(foDate);
+      baseDate.setDate(baseDate.getDate() - (c.period - adjustedDays));
+      APP.data.customers[custIdx].lastVisit = baseDate.toISOString().split('T')[0];
     }
   }
 
@@ -3706,8 +3767,9 @@ function foSavePayment() {
   // Cari alacak — ana firma varsa ona yazılır
   const c = foState.selectedCustomer;
   const paymentCariCustId = getCariCustomerId(c.id);
+  const foPayDate = document.getElementById('foDate')?.value || today();
   APP.data.cariTransactions.push({
-    id:uid(), customerId:paymentCariCustId, sourceCustomerId:c.id, date:today(), type:'odeme',
+    id:uid(), customerId:paymentCariCustId, sourceCustomerId:c.id, date:foPayDate, type:'odeme',
     description:(foState.paymentType==='nakit'?'Nakit':foState.paymentType==='eft'?'EFT':'Yakıt Kartı')+' ödeme'+(paymentCariCustId!==c.id?' ['+c.name+']':''),
     borc:0, alacak:amount
   });
@@ -3808,9 +3870,10 @@ function foSaveTediye() {
   const c = foState.selectedCustomer;
   APP.data.tediyeCounter++;
   const tediyeNo = 'TDY-' + String(APP.data.tediyeCounter).padStart(4,'0');
+  const foTedDate = document.getElementById('foDate')?.value || today();
 
   const tediye = {
-    id: uid(), tediyeNo, date: today(),
+    id: uid(), tediyeNo, date: foTedDate,
     customerId: c.id, personName: name, personTC: tc,
     amount, city: c.city||'', district: c.district||'',
     product: 'Atık Bitkisel Yağ',
@@ -3884,8 +3947,10 @@ function foUndoLastAction() {
     }
     // Remove receipt counter increment
     APP.data.receiptCounter = Math.max(0, (APP.data.receiptCounter||1) - 1);
-    // Remove related cari transaction
-    APP.data.cariTransactions = APP.data.cariTransactions.filter(t => !(t.customerId === r.customerId && t.description && t.description.includes(r.receiptNo)));
+    // Remove related cari transaction (match by receiptNo — cari may be on parent)
+    const undoCari = APP.data.cariTransactions.filter(t => t.description && t.description.includes(r.receiptNo));
+    APP.data.cariTransactions = APP.data.cariTransactions.filter(t => !(t.description && t.description.includes(r.receiptNo)));
+    undoCari.forEach(t => deleteFromFirestore('cariTransactions', t.id));
   }
 
   // Remove visit
@@ -3956,7 +4021,13 @@ function deleteVisit(id) {
   // Find related receipts and tediye
   const relReceipts = APP.data.receipts.filter(r => r.visitId === id || (r.customerId === visit.customerId && r.date === visit.date));
   const relTediye = APP.data.tediye.filter(t => t.visitId === id || (t.customerId === visit.customerId && t.date === visit.date));
-  const relCari = APP.data.cariTransactions.filter(t => t.visitId === id);
+  // Find cari by receipt numbers (cari may be on parent company)
+  const receiptNos = relReceipts.map(r => r.receiptNo);
+  const relCari = APP.data.cariTransactions.filter(t => 
+    t.visitId === id || 
+    t.sourceCustomerId === visit.customerId ||
+    receiptNos.some(no => t.description?.includes(no))
+  );
 
   let warningMsg = `🗑️ Bu ziyareti silmek istediğinize emin misiniz?\n\n`;
   warningMsg += `İşletme: ${visit.customerName}\n`;
@@ -4086,7 +4157,10 @@ function deleteReceipt(id) {
   if(!canDeleteRecord(receipt)) { toast('Bu kaydı silme yetkiniz yok. Sadece oluşturan kişi veya admin silebilir.','error'); return; }
 
   const relTediye = APP.data.tediye.filter(t => t.receiptId === id);
-  const relCari = APP.data.cariTransactions.filter(t => t.description?.indexOf(receipt.receiptNo)!==-1);
+  const relCari = APP.data.cariTransactions.filter(t => 
+    t.description?.indexOf(receipt.receiptNo)!==-1 || 
+    (t.sourceCustomerId === receipt.customerId && t.type === 'alim' && t.date === receipt.date)
+  );
   const relVisit = APP.data.visits.find(v => v.customerId===receipt.customerId && v.date===receipt.date && v.quantity===receipt.quantity);
 
   let warning = `🗑️ Bu makbuzu silmek istediğinize emin misiniz?\n\n`;
@@ -4101,8 +4175,9 @@ function deleteReceipt(id) {
 
   if(!confirm(warning)) return;
 
-  // Remove cari transactions
-  APP.data.cariTransactions = APP.data.cariTransactions.filter(t => t.description?.indexOf(receipt.receiptNo)===-1);
+  // Remove cari transactions (match by receiptNo or sourceCustomerId — cari may be on parent)
+  const relCariIds = new Set(relCari.map(t => t.id));
+  APP.data.cariTransactions = APP.data.cariTransactions.filter(t => !relCariIds.has(t.id));
   deleteMultipleFromFirestore('cariTransactions', relCari.map(t=>t.id));
 
   // Remove related tediye
@@ -4145,7 +4220,10 @@ function deleteTediye(id) {
   if(!t) return;
   if(!canDeleteRecord(t)) { toast('Bu kaydı silme yetkiniz yok. Sadece oluşturan kişi veya admin silebilir.','error'); return; }
 
-  const relCari = APP.data.cariTransactions.filter(c => c.tediyeId === id || c.description?.indexOf(t.tediyeNo)!==-1);
+  const relCari = APP.data.cariTransactions.filter(c => 
+    c.tediyeId === id || c.description?.indexOf(t.tediyeNo)!==-1 ||
+    (c.sourceCustomerId === t.customerId && c.type === 'odeme' && c.date === t.date && Math.abs((c.alacak||0) - (t.amount||0)) < 0.01)
+  );
 
   let warning = `🗑️ Bu tediye makbuzunu silmek istediğinize emin misiniz?\n\n`;
   warning += `Tediye No: ${t.tediyeNo}\n`;
@@ -4155,8 +4233,9 @@ function deleteTediye(id) {
 
   if(!confirm(warning)) return;
 
-  // Remove related cari
-  APP.data.cariTransactions = APP.data.cariTransactions.filter(c => c.tediyeId !== id && c.description?.indexOf(t.tediyeNo)===-1);
+  // Remove related cari (use ID set for precise matching)
+  const relCariIds = new Set(relCari.map(c => c.id));
+  APP.data.cariTransactions = APP.data.cariTransactions.filter(c => !relCariIds.has(c.id));
   deleteMultipleFromFirestore('cariTransactions', relCari.map(c=>c.id));
 
   APP.data.tediye = APP.data.tediye.filter(x=>x.id!==id);
@@ -4760,12 +4839,15 @@ function saveEditReceipt(id) {
     if(newV) newV.stock = (newV.stock||0) + qty;
   }
 
-  // Update cari transactions linked to this receipt
+  // Update cari transactions linked to this receipt (cari may be on parent)
+  const editCariCustId = getCariCustomerId(customerId);
+  const editChildName = editCariCustId !== customerId ? (customer?.name||'') : '';
   APP.data.cariTransactions.forEach(t => {
     if(t.description?.indexOf(oldReceipt.receiptNo)!==-1 && t.type === 'alim') {
-      t.customerId = customerId;
+      t.customerId = editCariCustId;
+      t.sourceCustomerId = customerId;
       t.date = APP.data.receipts[idx].date;
-      t.description = 'Alım: ' + oldReceipt.receiptNo + ' (' + qty + ' kg)';
+      t.description = 'Alım: ' + oldReceipt.receiptNo + ' (' + qty + ' kg)' + (editChildName ? ' ['+editChildName+']' : '');
       t.borc = total;
     }
   });
@@ -4895,12 +4977,12 @@ function saveEditTediye(id) {
   APP.data.tediye[idx].district = document.getElementById('mEditTedDistrict')?.value?.trim() || '';
   if(customerId) APP.data.tediye[idx].customerId = customerId;
 
-  // Update cari transactions linked to this tediye
+  // Update cari transactions linked to this tediye (cari may be on parent)
   APP.data.cariTransactions.forEach(t => {
     if(t.tediyeId === id || t.description?.indexOf(oldT.tediyeNo)!==-1) {
       t.date = newDate;
       t.alacak = newAmount;
-      if(customerId) t.customerId = customerId;
+      if(customerId) { t.customerId = getCariCustomerId(customerId); t.sourceCustomerId = customerId; }
     }
   });
 
