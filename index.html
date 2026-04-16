@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="(async()=>{let r=['=== Tanılama v14.6 ===','Firebase ready: '+(typeof isFirebaseReady!=='undefined'?isFirebaseReady:'TANIMSIZ'),'Online: '+navigator.onLine,'db obj: '+(typeof db),'auth obj: '+(typeof auth),'APP obj: '+(typeof APP)];try{if(typeof APP!=='undefined'&&APP.currentUser){r.push('User: '+APP.currentUser.email)}else{r.push('User: YOK')}if(typeof APP!=='undefined'&&APP.data){r.push('Local müşteri: '+APP.data.customers.length);r.push('Local araç: '+APP.data.vehicles.length);APP.data.vehicles.forEach(v=>r.push(' 🚛 '+v.plate))}}catch(e){r.push('APP err: '+e.message)}if(typeof db!=='undefined'&&db){try{await db.collection('_test').doc('p').set({t:Date.now()});r.push('✅ YAZMA OK')}catch(e){r.push('❌ YAZMA: '+e.code+' '+e.message)}try{const s=await db.collection('vehicles').get();r.push('Firebase araç: '+s.size);s.docs.forEach(d=>r.push(' 🚛 '+(d.data().plate||d.id)))}catch(e){r.push('❌ OKUMA: '+e.code+' '+e.message)}}else{r.push('db YOK - Firebase yüklenemedi!')}alert(r.join('\n'))})()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v15.9</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.0</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -6798,63 +6798,58 @@ function exportAuditLog() {
 }
 
 function downloadCustomerTemplate() {
+  // Calculate current balances
+  const balances = {};
+  APP.data.cariTransactions.forEach(t => {
+    if(!balances[t.customerId]) balances[t.customerId] = 0;
+    balances[t.customerId] += (t.borc||0) - (t.alacak||0);
+  });
+
   const data = APP.data.customers.map(c => ({
     'ID': c.id,
     'İşletme Adı': c.name || '',
     'İl': c.city || '',
-    'İlçe': c.district || '',
     'Nakit Fiyat': c.priceNakit || c.price || '',
     'Yakıt Kartı Fiyat': c.priceYakit || '',
     'Faturalı Fiyat': c.priceFatura || '',
-    'Tercih Edilen Ödeme': c.preferredPayment || '',
     'Yakıt Kartı No': c.fuelCardNo || '',
-    'Telefon': c.phone || '',
-    'Yetkili': c.contact || '',
-    'Periyot (gün)': c.period || '',
-    'Tip': c.type === 'periodic' ? 'Periyodik' : c.type === 'onDemand' ? 'Talep Üzerine' : '',
-    'Son Ziyaret': c.lastVisit || '',
-    'Notlar': c.notes || ''
+    'Cari Bakiye': balances[c.id] ? Math.round(balances[c.id]*100)/100 : ''
   }));
   
   const ws = XLSX.utils.json_to_sheet(data);
+  ws['!cols'] = [{wch:10},{wch:32},{wch:14},{wch:12},{wch:16},{wch:14},{wch:18},{wch:14}];
   
-  // Set column widths
-  ws['!cols'] = [
-    {wch:10},{wch:30},{wch:12},{wch:15},
-    {wch:12},{wch:15},{wch:12},{wch:18},
-    {wch:15},{wch:14},{wch:20},{wch:10},
-    {wch:14},{wch:12},{wch:30}
-  ];
-  
-  // Create workbook
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Müşteriler');
   
-  // Add instruction sheet
+  // Instructions sheet
   const instr = XLSX.utils.aoa_to_sheet([
     ['EKOSA CRM — Müşteri Bilgi Şablonu'],
     [''],
-    ['Bu dosyayı doldurup admin paneline yükleyerek müşteri bilgilerini toplu güncelleyebilirsiniz.'],
+    ['NASIL DOLDURULUR:'],
     [''],
-    ['KURALLAR:'],
-    ['1. ID ve İşletme Adı sütunlarını DEĞİŞTİRMEYİN (eşleşme bunlara göre yapılır)'],
+    ['1. ID ve İşletme Adı sütunlarını DEĞİŞTİRMEYİN'],
     ['2. Boş bıraktığınız alanlar sistemdeki mevcut değeri korur'],
-    ['3. Tercih Edilen Ödeme: Nakit / Yakıt Kartı / Faturalı / Karışık yazınız'],
-    ['4. Tip: "Periyodik" veya "Talep Üzerine" yazınız'],
-    ['5. Fiyatları sadece sayı olarak girin (örn: 45 veya 45.50)'],
+    ['3. Fiyatları sadece sayı olarak girin (örn: 45 veya 45.50)'],
     [''],
-    ['KDV KURALI:'],
-    ['• Nakit Fiyat: KDV YOKTUR (net fiyat)'],
-    ['• Yakıt Kartı / Faturalı: KDV DAHİL (%20)'],
+    ['FİYAT KURALI:'],
+    ['• Nakit Fiyat → KDV YOK (net fiyat)'],
+    ['• Yakıt Kartı Fiyat → KDV DAHİL (%20)'],
+    ['• Faturalı Fiyat → KDV DAHİL (%20)'],
     [''],
-    ['Sorun yaşarsanız Ahmet Görken ile iletişime geçin.']
+    ['CARİ BAKİYE:'],
+    ['• Pozitif sayı = İşletmeye borcumuz var (örn: 500)'],
+    ['• Negatif sayı = Fazla ödeme yaptık / alacağımız var (örn: -200)'],
+    ['• Boş veya 0 = Devir bakiye yok'],
+    ['• Mevcut bakiye varsa üzerine YAZILIR (eski devir silinip yenisi eklenir)'],
+    [''],
+    ['Hazırlayan: Ahmet Görken — Ekosa Çevre Çözümleri']
   ]);
-  instr['!cols'] = [{wch:80}];
+  instr['!cols'] = [{wch:70}];
   XLSX.utils.book_append_sheet(wb, instr, 'TALİMATLAR');
   
-  // Download
   XLSX.writeFile(wb, `Ekosa_Musteri_Sablonu_${today()}.xlsx`);
-  toast('✅ Şablon indirildi. Excel\'de açıp düzenleyin.', 'success');
+  toast('✅ Şablon indirildi — Excel\'de doldurup yükleyin', 'success');
 }
 
 function uploadCustomerTemplate(input) {
@@ -6870,86 +6865,82 @@ function uploadCustomerTemplate(input) {
       
       if(!rows.length) { toast('Dosyada veri bulunamadı','error'); return; }
       
-      // Validation preview
-      let matched = 0, updated = 0, notFound = 0;
-      const changes = [];
+      let matched = 0, updated = 0, cariUpdated = 0, notFound = 0;
       
       rows.forEach(row => {
         const id = String(row['ID']||'').trim();
         const name = String(row['İşletme Adı']||'').trim();
         if(!id && !name) return;
         
-        // Find customer by ID or name (case insensitive)
         let cust = APP.data.customers.find(c => c.id === id);
-        if(!cust && name) {
-          cust = APP.data.customers.find(c => (c.name||'').toLowerCase() === name.toLowerCase());
-        }
+        if(!cust && name) cust = APP.data.customers.find(c => (c.name||'').toLowerCase() === name.toLowerCase());
         
         if(!cust) { notFound++; return; }
         matched++;
         
         let changed = false;
-        const updates = {};
         
-        // Only update if value is non-empty
         const nakit = parseFloat(row['Nakit Fiyat']);
-        if(!isNaN(nakit) && nakit > 0 && cust.priceNakit !== nakit) { updates.priceNakit = nakit; changed = true; }
+        if(!isNaN(nakit) && nakit > 0) { cust.priceNakit = nakit; cust.price = nakit; changed = true; }
         
         const yakit = parseFloat(row['Yakıt Kartı Fiyat']);
-        if(!isNaN(yakit) && yakit > 0 && cust.priceYakit !== yakit) { updates.priceYakit = yakit; changed = true; }
+        if(!isNaN(yakit) && yakit > 0) { cust.priceYakit = yakit; changed = true; }
         
         const fatura = parseFloat(row['Faturalı Fiyat']);
-        if(!isNaN(fatura) && fatura > 0 && cust.priceFatura !== fatura) { updates.priceFatura = fatura; changed = true; }
-        
-        const pref = String(row['Tercih Edilen Ödeme']||'').trim();
-        if(pref && cust.preferredPayment !== pref) { updates.preferredPayment = pref; changed = true; }
+        if(!isNaN(fatura) && fatura > 0) { cust.priceFatura = fatura; changed = true; }
         
         const fuel = String(row['Yakıt Kartı No']||'').trim();
-        if(fuel && cust.fuelCardNo !== fuel) { updates.fuelCardNo = fuel; changed = true; }
+        if(fuel) { cust.fuelCardNo = fuel; changed = true; }
         
-        const phone = String(row['Telefon']||'').trim();
-        if(phone && cust.phone !== phone) { updates.phone = phone; changed = true; }
+        if(changed) updated++;
         
-        const contact = String(row['Yetkili']||'').trim();
-        if(contact && cust.contact !== contact) { updates.contact = contact; changed = true; }
-        
-        const period = parseInt(row['Periyot (gün)']);
-        if(!isNaN(period) && period > 0 && cust.period !== period) { updates.period = period; changed = true; }
-        
-        const notes = String(row['Notlar']||'').trim();
-        if(notes && cust.notes !== notes) { updates.notes = notes; changed = true; }
-        
-        if(changed) {
-          Object.assign(cust, updates);
-          updated++;
-          changes.push(`• ${cust.name}: ${Object.keys(updates).join(', ')}`);
+        // Handle cari bakiye (devir)
+        const bakiye = parseFloat(row['Cari Bakiye']);
+        if(!isNaN(bakiye) && bakiye !== 0) {
+          // Remove old devir entries for this customer
+          const cariCustId = getCariCustomerId(cust.id);
+          APP.data.cariTransactions = APP.data.cariTransactions.filter(t => 
+            !(t.customerId === cariCustId && t.type === 'duzeltme' && t.description && t.description.includes('Devir'))
+          );
+          
+          // Add new devir entry
+          APP.data.cariTransactions.push({
+            id: uid(),
+            customerId: cariCustId,
+            sourceCustomerId: cust.id,
+            date: '2026-01-01',
+            type: 'duzeltme',
+            description: 'Devir bakiye (Excel aktarım)',
+            borc: bakiye > 0 ? Math.abs(bakiye) : 0,
+            alacak: bakiye < 0 ? Math.abs(bakiye) : 0
+          });
+          cariUpdated++;
         }
       });
       
-      input.value = ''; // reset input
+      input.value = '';
       
-      if(!matched) { toast('Hiç müşteri eşleşmedi. ID ve İşletme Adı alanlarını kontrol edin.','error'); return; }
+      if(!matched) { toast('Hiç müşteri eşleşmedi. ID ve İşletme Adı sütunlarını kontrol edin.','error'); return; }
       
-      // Confirm before saving
-      let msg = `📊 Yükleme Özeti:\n\n`;
-      msg += `• Eşleşen müşteri: ${matched}\n`;
-      msg += `• Güncellenen: ${updated}\n`;
-      if(notFound) msg += `• Bulunamayan: ${notFound}\n`;
-      msg += `\nDeğişiklikler uygulansın mı?`;
-      
-      if(updated === 0) {
-        alert('Yüklenen dosyada değişiklik bulunamadı (tüm değerler zaten aynı veya boş).');
+      const totalChanges = updated + cariUpdated;
+      if(totalChanges === 0) {
+        alert('Dosyada değişiklik bulunamadı (tüm değerler zaten aynı veya boş).');
         return;
       }
+      
+      let msg = `📊 Yükleme Özeti:\n\n`;
+      msg += `• Eşleşen: ${matched} müşteri\n`;
+      if(updated) msg += `• Bilgi güncellenen: ${updated} müşteri\n`;
+      if(cariUpdated) msg += `• Cari devir eklenen: ${cariUpdated} müşteri\n`;
+      if(notFound) msg += `• Bulunamayan: ${notFound}\n`;
+      msg += `\nUygulansın mı?`;
       
       if(!confirm(msg)) return;
       
       saveData();
       renderCustomers();
-      logAction('update', 'customer', `Toplu güncelleme: ${updated} müşteri`);
-      toast(`✅ ${updated} müşteri başarıyla güncellendi`, 'success');
-      
-      // Refresh the admin panel
+      logAction('update', 'customer', `Toplu güncelleme: ${updated} bilgi, ${cariUpdated} cari devir`);
+      toast(`✅ ${updated} müşteri güncellendi, ${cariUpdated} cari devir eklendi`, 'success');
       switchAdminTab('customerTemplate');
       
     } catch(err) {
@@ -7207,26 +7198,31 @@ function switchAdminTab(tab) {
         <div class="widget-header"><div class="widget-title">📋 Şablondaki Alanlar</div></div>
         <div class="widget-body" style="padding:0;">
           <table class="data-table" style="font-size:12px;">
-            <thead><tr><th>Alan</th><th>Açıklama</th><th>Zorunlu mu?</th></tr></thead>
+            <thead><tr><th>Alan</th><th>Açıklama</th><th>Örnek</th></tr></thead>
             <tbody>
-              <tr><td><strong>ID</strong></td><td>Sistem kayıt numarası (değiştirmeyin!)</td><td>Evet</td></tr>
-              <tr><td><strong>İşletme Adı</strong></td><td>Eşleştirme için kullanılır (değiştirmeyin)</td><td>Evet</td></tr>
-              <tr><td><strong>İl</strong></td><td>Müşterinin ili</td><td>Hayır</td></tr>
-              <tr><td><strong>İlçe</strong></td><td>Müşterinin ilçesi</td><td>Hayır</td></tr>
-              <tr><td style="color:#2e7d32;"><strong>Nakit Fiyat</strong></td><td>₺/kg cinsinden (KDV yok)</td><td>Hayır</td></tr>
-              <tr><td style="color:#2e7d32;"><strong>Yakıt Kartı Fiyat</strong></td><td>₺/kg cinsinden (KDV dahil)</td><td>Hayır</td></tr>
-              <tr><td style="color:#2e7d32;"><strong>Faturalı Fiyat</strong></td><td>₺/kg cinsinden (KDV dahil)</td><td>Hayır</td></tr>
-              <tr><td style="color:#1976d2;"><strong>Tercih Edilen Ödeme</strong></td><td>Nakit / Yakıt Kartı / Faturalı / Karışık</td><td>Hayır</td></tr>
-              <tr><td style="color:#1976d2;"><strong>Yakıt Kartı No</strong></td><td>Shell kart numarası</td><td>Hayır</td></tr>
-              <tr><td>Telefon</td><td>İletişim numarası</td><td>Hayır</td></tr>
-              <tr><td>Periyot (gün)</td><td>Kaç günde bir ziyaret edilecek</td><td>Hayır</td></tr>
+              <tr style="background:#f0f0f0;"><td><strong>ID</strong></td><td>Sistem numarası — <strong>değiştirmeyin!</strong></td><td style="color:#999;">abc123</td></tr>
+              <tr style="background:#f0f0f0;"><td><strong>İşletme Adı</strong></td><td>Eşleştirme için — <strong>değiştirmeyin!</strong></td><td style="color:#999;">Ohannes Burger</td></tr>
+              <tr style="background:#f0f0f0;"><td><strong>İl</strong></td><td>Referans için (değiştirmeyin)</td><td style="color:#999;">DENİZLİ</td></tr>
+              <tr><td style="color:#2e7d32;"><strong>Nakit Fiyat</strong></td><td>₺/kg — KDV yok, net fiyat</td><td>45</td></tr>
+              <tr><td style="color:#2e7d32;"><strong>Yakıt Kartı Fiyat</strong></td><td>₺/kg — KDV dahil (%20)</td><td>54</td></tr>
+              <tr><td style="color:#2e7d32;"><strong>Faturalı Fiyat</strong></td><td>₺/kg — KDV dahil (%20)</td><td>54</td></tr>
+              <tr><td style="color:#1976d2;"><strong>Yakıt Kartı No</strong></td><td>Shell kart numarası</td><td>7084350012345678</td></tr>
+              <tr><td style="color:#c62828;"><strong>Cari Bakiye</strong></td><td>Pozitif = borcumuz var / Negatif = alacağımız var</td><td>500 veya -200</td></tr>
             </tbody>
           </table>
         </div>
       </div>
       
-      <div style="background:#fff3e0;border-left:4px solid #ff9800;padding:12px 16px;border-radius:4px;margin-top:16px;font-size:12px;">
-        <strong>⚠️ Önemli:</strong> ID ve İşletme Adı sütunlarını değiştirmeyin. Eşleşme bu iki alana göre yapılır. Boş bıraktığınız alanlar sistemdeki mevcut değeri korur (silinmez).
+      <div style="background:#e8f5e9;border-left:4px solid #2e7d32;padding:12px 16px;border-radius:4px;margin-top:16px;font-size:12px;">
+        <strong>✅ Cari Bakiye Nasıl Çalışır:</strong><br>
+        • <strong>500</strong> yazarsanız → İşletmeye 500 ₺ borcumuz var (devir borç)<br>
+        • <strong>-200</strong> yazarsanız → 200 ₺ fazla ödeme yapmışız (devir alacak)<br>
+        • <strong>Boş</strong> bırakırsanız → Devir eklenmez<br>
+        • Tekrar yüklerseniz → Eski devir silinip yenisi yazılır
+      </div>
+      
+      <div style="background:#fff3e0;border-left:4px solid #ff9800;padding:12px 16px;border-radius:4px;margin-top:12px;font-size:12px;">
+        <strong>⚠️ Önemli:</strong> İlk 3 sütunu (ID, İşletme Adı, İl) değiştirmeyin. Sadece fiyat, kart no ve bakiye sütunlarını doldurun. Boş bıraktığınız alanlar mevcut değeri korur.
       </div>
     `;
   }
