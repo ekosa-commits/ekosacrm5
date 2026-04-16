@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="(async()=>{let r=['=== Tanılama v14.6 ===','Firebase ready: '+(typeof isFirebaseReady!=='undefined'?isFirebaseReady:'TANIMSIZ'),'Online: '+navigator.onLine,'db obj: '+(typeof db),'auth obj: '+(typeof auth),'APP obj: '+(typeof APP)];try{if(typeof APP!=='undefined'&&APP.currentUser){r.push('User: '+APP.currentUser.email)}else{r.push('User: YOK')}if(typeof APP!=='undefined'&&APP.data){r.push('Local müşteri: '+APP.data.customers.length);r.push('Local araç: '+APP.data.vehicles.length);APP.data.vehicles.forEach(v=>r.push(' 🚛 '+v.plate))}}catch(e){r.push('APP err: '+e.message)}if(typeof db!=='undefined'&&db){try{await db.collection('_test').doc('p').set({t:Date.now()});r.push('✅ YAZMA OK')}catch(e){r.push('❌ YAZMA: '+e.code+' '+e.message)}try{const s=await db.collection('vehicles').get();r.push('Firebase araç: '+s.size);s.docs.forEach(d=>r.push(' 🚛 '+(d.data().plate||d.id)))}catch(e){r.push('❌ OKUMA: '+e.code+' '+e.message)}}else{r.push('db YOK - Firebase yüklenemedi!')}alert(r.join('\n'))})()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v14.7</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v14.8</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -6250,94 +6250,129 @@ function loadFirmaBilgi() {
 // ============================================================
 async function fullRestoreFromImport() {
   if(typeof IMPORT_DATA === 'undefined' || !IMPORT_DATA.customers) {
-    toast('IMPORT_DATA bulunamadı!','error');
+    alert('❌ IMPORT_DATA bulunamadı!');
     return;
   }
   if(!confirm(`🔄 TAM VERİ GERİ YÜKLEME\n\nBu işlem:\n• Firebase'deki müşteri, ziyaret, teklif, tediye verilerini SİLECEK\n• ${IMPORT_DATA.customers.length} müşteri, ${IMPORT_DATA.visits?.length||0} ziyaret, ${IMPORT_DATA.proposals?.length||0} teklif, ${IMPORT_DATA.tediye?.length||0} tediye yükleyecek\n• Araçlar, depolar ve yakıt kartlarını KORUYACAK\n\nDevam etmek istiyor musunuz?`)) return;
   
-  if(!isFirebaseReady) {
-    toast('Firebase hazır değil!','error');
+  if(!isFirebaseReady || !db) {
+    alert('❌ Firebase hazır değil! isFirebaseReady:' + isFirebaseReady + ' db:' + (typeof db));
     return;
   }
 
-  toast('🔄 Geri yükleme başladı...', 'info');
   APP._isPushing = true;
+  const log = [];
+  const logAdd = (msg) => { log.push(msg); console.log(msg); };
 
   try {
-    // 1. Delete collections we want to restore
+    logAdd('🔄 Başlatılıyor...');
+    toast('🔄 Geri yükleme başladı...', 'info');
+
+    // 1. Delete collections
     const toRestore = ['customers','visits','proposals','tediye','cariTransactions'];
     for(const col of toRestore) {
-      const snap = await db.collection(col).get();
-      if(!snap.empty) {
-        // Delete in batches of 450
-        for(let i=0; i<snap.docs.length; i+=450) {
-          const batch = db.batch();
-          snap.docs.slice(i, i+450).forEach(doc => batch.delete(doc.ref));
-          await batch.commit();
+      try {
+        const snap = await db.collection(col).get();
+        logAdd(`🗑️ ${col}: ${snap.size} silinecek`);
+        if(!snap.empty) {
+          for(let i=0; i<snap.docs.length; i+=400) {
+            const chunk = snap.docs.slice(i, i+400);
+            const batch = db.batch();
+            chunk.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+          }
         }
+      } catch(e) {
+        logAdd(`⚠️ Silme hatası (${col}): ${e.message}`);
       }
-      console.log('🗑️ ' + col + ' temizlendi (' + snap.size + ')');
     }
 
-    // 2. Load IMPORT_DATA into APP.data (keep vehicles/depots/etc)
+    // 2. Load IMPORT_DATA into APP.data
     const preservedKeys = ['vehicles','depots','facilities','urgentRequests','notes','licenses','depotExits','depotEntries','fuelCards'];
     const preserved = {};
     preservedKeys.forEach(k => preserved[k] = APP.data[k]);
     
     for(const col of toRestore) {
       if(IMPORT_DATA[col] && Array.isArray(IMPORT_DATA[col])) {
-        APP.data[col] = IMPORT_DATA[col];
+        APP.data[col] = JSON.parse(JSON.stringify(IMPORT_DATA[col])); // deep clone
+      } else {
+        APP.data[col] = [];
       }
     }
     
-    // Restore preserved
     preservedKeys.forEach(k => { if(preserved[k]) APP.data[k] = preserved[k]; });
     
     if(IMPORT_DATA.cities) APP.data.cities = IMPORT_DATA.cities;
     if(IMPORT_DATA.productTypes) APP.data.productTypes = IMPORT_DATA.productTypes;
 
-    // 3. Save to localStorage
     localStorage.setItem('ekosa_crm_v14', JSON.stringify(APP.data));
+    logAdd('💾 Local kaydedildi');
 
-    // 4. Push to Firebase in batches
-    let batch = db.batch();
-    let count = 0;
+    // 3. Push to Firebase - one item at a time, more reliable
     for(const col of toRestore) {
-      if(!APP.data[col]) continue;
-      for(const item of APP.data[col]) {
-        if(!item?.id) continue;
-        batch.set(db.collection(col).doc(item.id), item);
-        count++;
-        if(count >= 450) {
-          await batch.commit();
-          batch = db.batch();
-          count = 0;
+      const items = APP.data[col] || [];
+      if(items.length === 0) continue;
+      logAdd(`⬆️ ${col}: ${items.length} yükleniyor...`);
+      
+      // Use batches
+      let batch = db.batch();
+      let batchCount = 0;
+      let total = 0;
+      
+      for(const item of items) {
+        if(!item || typeof item !== 'object' || !item.id) continue;
+        try {
+          // Remove any undefined values (Firestore doesn't accept them)
+          const clean = {};
+          for(const k in item) {
+            if(item[k] !== undefined) clean[k] = item[k];
+          }
+          const ref = db.collection(col).doc(String(item.id));
+          batch.set(ref, clean);
+          batchCount++;
+          total++;
+          
+          if(batchCount >= 400) {
+            await batch.commit();
+            batch = db.batch();
+            batchCount = 0;
+          }
+        } catch(e) {
+          logAdd(`⚠️ ${col} item hata: ${e.message}`);
         }
       }
+      
+      if(batchCount > 0) {
+        await batch.commit();
+      }
+      logAdd(`✅ ${col}: ${total} yüklendi`);
     }
-    if(count > 0) await batch.commit();
 
-    // 5. Update settings
-    await db.collection('settings').doc('app').set({
-      cities: APP.data.cities || [],
-      productTypes: APP.data.productTypes || [],
-      receiptCounter: APP.data.receiptCounter || 0,
-      tediyeCounter: APP.data.tediyeCounter || 0,
-    }, {merge:true});
+    // 4. Settings
+    try {
+      await db.collection('settings').doc('app').set({
+        cities: APP.data.cities || [],
+        productTypes: APP.data.productTypes || [],
+        receiptCounter: APP.data.receiptCounter || 0,
+        tediyeCounter: APP.data.tediyeCounter || 0,
+      }, {merge:true});
+      logAdd('✅ Ayarlar kaydedildi');
+    } catch(e) {
+      logAdd(`⚠️ Ayarlar: ${e.message}`);
+    }
 
-    // 6. Reset shadow sync state
     _lastSynced = {};
-
     APP._isPushing = false;
     populateCityFilters();
     refreshCurrentPage();
-    toast(`✅ Geri yükleme tamamlandı: ${APP.data.customers.length} müşteri, ${APP.data.visits.length} ziyaret`, 'success');
-    alert(`✅ BAŞARILI!\n\n${APP.data.customers.length} müşteri\n${APP.data.visits.length} ziyaret\n${APP.data.proposals.length} teklif\n${APP.data.tediye.length} tediye\n\nDiğer cihazlar 1-2 dakika içinde otomatik güncellenecek.`);
+    
+    toast(`✅ ${APP.data.customers.length} müşteri, ${APP.data.visits.length} ziyaret yüklendi`, 'success');
+    alert(`✅ BAŞARILI!\n\n${APP.data.customers.length} müşteri\n${APP.data.visits.length} ziyaret\n${APP.data.proposals.length} teklif\n${APP.data.tediye.length} tediye\n\nDiğer cihazlar 1-2 dk içinde güncellenir.\n\n--- Log ---\n${log.slice(-10).join('\n')}`);
   } catch(e) {
     APP._isPushing = false;
     console.error('Full restore error:', e);
-    toast('❌ Hata: ' + e.message, 'error');
-    alert('❌ Geri yükleme hatası:\n\n' + e.message);
+    console.error('Stack:', e.stack);
+    alert(`❌ Hata:\n\n${e.message}\n\nSon loglar:\n${log.slice(-8).join('\n')}`);
   }
 }
 
