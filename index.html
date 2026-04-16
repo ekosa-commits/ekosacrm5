@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="(async()=>{let r=['=== Tanılama v14.6 ===','Firebase ready: '+(typeof isFirebaseReady!=='undefined'?isFirebaseReady:'TANIMSIZ'),'Online: '+navigator.onLine,'db obj: '+(typeof db),'auth obj: '+(typeof auth),'APP obj: '+(typeof APP)];try{if(typeof APP!=='undefined'&&APP.currentUser){r.push('User: '+APP.currentUser.email)}else{r.push('User: YOK')}if(typeof APP!=='undefined'&&APP.data){r.push('Local müşteri: '+APP.data.customers.length);r.push('Local araç: '+APP.data.vehicles.length);APP.data.vehicles.forEach(v=>r.push(' 🚛 '+v.plate))}}catch(e){r.push('APP err: '+e.message)}if(typeof db!=='undefined'&&db){try{await db.collection('_test').doc('p').set({t:Date.now()});r.push('✅ YAZMA OK')}catch(e){r.push('❌ YAZMA: '+e.code+' '+e.message)}try{const s=await db.collection('vehicles').get();r.push('Firebase araç: '+s.size);s.docs.forEach(d=>r.push(' 🚛 '+(d.data().plate||d.id)))}catch(e){r.push('❌ OKUMA: '+e.code+' '+e.message)}}else{r.push('db YOK - Firebase yüklenemedi!')}alert(r.join('\n'))})()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v15.5</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v15.7</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -664,7 +664,7 @@ input, select, textarea, button { font-family: var(--font); }
 
         <!-- ===== MÜŞTERILER ===== -->
         <div class="page" id="page-customers">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:10px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px;">
             <div class="search-box" style="flex:1;min-width:200px;margin-bottom:0;">
               <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input class="search-input" type="text" placeholder="Müşteri ara..." id="customerSearch" oninput="filterCustomers()">
@@ -684,6 +684,26 @@ input, select, textarea, button { font-family: var(--font); }
               </button>
             </div>
           </div>
+          <!-- Aktif / Pasif Tabs -->
+          <div style="display:flex;gap:0;margin-bottom:16px;">
+            <button class="btn" id="custTabActive" onclick="switchCustomerTab('active')" style="flex:1;border-radius:6px 0 0 6px;padding:10px;font-weight:600;background:#1B2A4A;color:white;">
+              ✅ Aktif Müşteriler <span id="custActiveCount" style="background:rgba(255,255,255,0.2);padding:1px 8px;border-radius:10px;font-size:11px;margin-left:4px;"></span>
+            </button>
+            <button class="btn" id="custTabPassive" onclick="switchCustomerTab('passive')" style="flex:1;border-radius:0 6px 6px 0;padding:10px;font-weight:600;background:#f8f9fa;color:var(--text-secondary);border:1px solid var(--border);">
+              🚫 Pasif Müşteriler <span id="custPassiveCount" style="background:rgba(198,40,40,0.1);color:var(--danger);padding:1px 8px;border-radius:10px;font-size:11px;margin-left:4px;"></span>
+            </button>
+          </div>
+          <!-- Pasif neden filtresi (sadece pasif tab'da görünür) -->
+          <div id="passiveReasonFilter" style="display:none;margin-bottom:12px;">
+            <select class="form-select" id="customerPassiveReasonFilter" onchange="filterCustomers()" style="width:auto;padding:8px 12px;">
+              <option value="">Tüm Nedenler</option>
+              <option value="lost">😔 Kaybedilmiş Müşteri</option>
+              <option value="closed">🔒 Kapanan İşletme</option>
+              <option value="seasonal">🌙 Sezonluk Kapanma</option>
+              <option value="lowvolume">📉 Düşük Hacim</option>
+              <option value="other">📝 Diğer</option>
+            </select>
+          </div>
           <div class="widget">
             <div class="data-table-wrap">
               <table class="data-table" id="customersTable">
@@ -695,7 +715,7 @@ input, select, textarea, button { font-family: var(--font); }
                     <th>Telefon</th>
                     <th>Tip</th>
                     <th>Periyot</th>
-                    <th>Kalan Gün</th>
+                    <th id="custCol7">Kalan Gün</th>
                     <th>N.Fiyat</th>
                     <th>Varil</th>
                     <th>İşlem</th>
@@ -1272,6 +1292,7 @@ input, select, textarea, button { font-family: var(--font); }
             <div class="tab" onclick="switchAdminTab('productsAdmin')">Ürün Türleri</div>
             <div class="tab" onclick="switchAdminTab('logo')">🖼️ Logo</div>
             <div class="tab" onclick="switchAdminTab('auditLog')">📋 Log Defteri</div>
+            <div class="tab" onclick="switchAdminTab('customerTemplate')" style="color:#8DC63F;">📥 Müşteri Bilgi Şablonu</div>
             <div class="tab" onclick="switchAdminTab('dataMigration')">📦 Veri Aktarma</div>
             <div class="tab" onclick="switchAdminTab('backup')" style="color:var(--accent);">💾 Yedekleme</div>
           </div>
@@ -1819,6 +1840,25 @@ function canEditRecord(record) {
 function canDeleteRecord(record) {
   // Same rules as edit for now
   return canEditRecord(record);
+}
+
+// Resolve cari customer — if child has a parent, cari goes to parent
+function getCariCustomerId(customerId) {
+  const c = APP.data.customers.find(x => x.id === customerId);
+  if(c && c.parentId) {
+    const parent = APP.data.customers.find(x => x.id === c.parentId);
+    if(parent) return parent.id;
+  }
+  return customerId;
+}
+
+// Get all child customer IDs for a parent (including parent itself)
+function getGroupCustomerIds(customerId) {
+  const ids = [customerId];
+  APP.data.customers.forEach(c => {
+    if(c.parentId === customerId) ids.push(c.id);
+  });
+  return ids;
 }
 
 // Log action for audit trail (Madde 12)
@@ -2577,14 +2617,22 @@ function renderDashboard() {
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate()+1);
   const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
-  // Calculate visit lists
+  // Calculate visit lists + per-city stats
   const todayVisits = [], tomorrowVisits = [], overdueVisits = [];
-  APP.data.customers.filter(c => c.type === 'periodic').forEach(c => {
+  const cityStats = {}; // { city: {total, overdue, today, upcoming, normal} }
+  APP.data.customers.filter(c => c.type === 'periodic' && !c.isPassive).forEach(c => {
+    const cityKey = c.city || 'Bilinmiyor';
+    if(!cityStats[cityKey]) cityStats[cityKey] = {total:0, overdue:0, today:0, upcoming:0, normal:0};
+    cityStats[cityKey].total++;
     const rem = getRemainingDays(c);
     if(rem !== null) {
-      if(rem < 0) overdueVisits.push({...c, remaining:rem});
-      else if(rem === 0) todayVisits.push({...c, remaining:rem});
-      else if(rem === 1) tomorrowVisits.push({...c, remaining:rem});
+      if(rem < 0) { overdueVisits.push({...c, remaining:rem}); cityStats[cityKey].overdue++; }
+      else if(rem === 0) { todayVisits.push({...c, remaining:rem}); cityStats[cityKey].today++; }
+      else if(rem === 1) { tomorrowVisits.push({...c, remaining:rem}); cityStats[cityKey].upcoming++; }
+      else if(rem <= 3) cityStats[cityKey].upcoming++;
+      else cityStats[cityKey].normal++;
+    } else {
+      cityStats[cityKey].normal++;
     }
   });
 
@@ -2620,6 +2668,40 @@ function renderDashboard() {
   }));
 
   container.innerHTML = `
+    <!-- İl Bazlı Ziyaret Durumu -->
+    <div class="widget" style="grid-column:1/-1;">
+      <div class="widget-header">
+        <div class="widget-title">🗺️ İl Bazlı Ziyaret Durumu</div>
+        <div style="font-size:11px;color:var(--text-secondary);">Gecikmiş + Bugün + Yaklaşan = Aksiyon gerekenler</div>
+      </div>
+      <div class="widget-body" style="padding:8px 16px 16px;">
+        ${Object.entries(cityStats).filter(([_,s])=>s.total>0).sort((a,b)=>(b[1].overdue+b[1].today+b[1].upcoming)-(a[1].overdue+a[1].today+a[1].upcoming)).map(([city,s]) => {
+          const actionNeeded = s.overdue + s.today + s.upcoming;
+          const percent = s.total ? Math.round((actionNeeded/s.total)*100) : 0;
+          const barColor = percent>=50 ? 'var(--danger)' : percent>=25 ? '#ff9800' : 'var(--success)';
+          return `<div style="padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="navigateTo('cityTracking');setTimeout(()=>{const f=document.getElementById('cityTrackFilter');if(f){f.value='${city}';renderCityTracking();}},100)" title="İl takip sayfasına git">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+              <div style="font-weight:600;font-size:13px;">📍 ${city} <span style="color:var(--text-secondary);font-weight:400;font-size:11px;">(${s.total} işletme)</span></div>
+              <div style="display:flex;gap:8px;align-items:center;font-size:11px;">
+                ${s.overdue?`<span class="wlist-tag tag-red">🔴 ${s.overdue} gecikmiş</span>`:''}
+                ${s.today?`<span class="wlist-tag tag-yellow">📅 ${s.today} bugün</span>`:''}
+                ${s.upcoming?`<span class="wlist-tag tag-blue">⏰ ${s.upcoming} yakın</span>`:''}
+                ${!actionNeeded?`<span class="wlist-tag tag-green">✅ tümü zamanında</span>`:''}
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div style="flex:1;height:10px;background:#e9ecef;border-radius:5px;overflow:hidden;">
+                <div style="width:${percent}%;height:100%;background:${barColor};transition:width 0.3s;"></div>
+              </div>
+              <div style="font-size:11px;font-weight:700;color:${barColor};min-width:80px;text-align:right;">
+                ${actionNeeded}/${s.total} (${percent}%)
+              </div>
+            </div>
+          </div>`;
+        }).join('') || '<div class="widget-empty">Henüz periyodik müşteri yok</div>'}
+      </div>
+    </div>
+
     <!-- Gecikmiş Ziyaretler -->
     <div class="widget">
       <div class="widget-header">
@@ -2833,23 +2915,91 @@ function renderDashboard() {
 // ============================================================
 // CUSTOMERS
 // ============================================================
+let _customerTab = 'active'; // 'active' or 'passive'
+
+function switchCustomerTab(tab) {
+  _customerTab = tab;
+  // Update tab styles
+  const activeBtn = document.getElementById('custTabActive');
+  const passiveBtn = document.getElementById('custTabPassive');
+  if(tab === 'active') {
+    activeBtn.style.background = '#1B2A4A'; activeBtn.style.color = 'white'; activeBtn.style.border = 'none';
+    passiveBtn.style.background = '#f8f9fa'; passiveBtn.style.color = 'var(--text-secondary)'; passiveBtn.style.border = '1px solid var(--border)';
+  } else {
+    passiveBtn.style.background = '#c62828'; passiveBtn.style.color = 'white'; passiveBtn.style.border = 'none';
+    activeBtn.style.background = '#f8f9fa'; activeBtn.style.color = 'var(--text-secondary)'; activeBtn.style.border = '1px solid var(--border)';
+  }
+  // Show/hide passive reason filter
+  const reasonFilter = document.getElementById('passiveReasonFilter');
+  if(reasonFilter) reasonFilter.style.display = tab === 'passive' ? '' : 'none';
+  // Update column header
+  const col7 = document.getElementById('custCol7');
+  if(col7) col7.textContent = tab === 'passive' ? 'Pasif Nedeni' : 'Kalan Gün';
+  renderCustomers();
+}
+
 function renderCustomers() {
   const tbody = document.getElementById('customersBody');
-  let filtered = [...APP.data.customers];
+  const isPassiveTab = _customerTab === 'passive';
+
+  let filtered = APP.data.customers.filter(c => isPassiveTab ? c.isPassive : !c.isPassive);
+
   const search = document.getElementById('customerSearch')?.value?.toLowerCase() || '';
   const cityF = document.getElementById('customerCityFilter')?.value || '';
   const typeF = document.getElementById('customerTypeFilter')?.value || '';
+  const reasonF = isPassiveTab ? (document.getElementById('customerPassiveReasonFilter')?.value || '') : '';
 
   if(search) filtered = filtered.filter(c => c.name.toLowerCase().includes(search) || (c.contact||'').toLowerCase().includes(search));
   if(cityF) filtered = filtered.filter(c => c.city === cityF);
   if(typeF) filtered = filtered.filter(c => c.type === typeF);
+  if(reasonF) filtered = filtered.filter(c => c.passiveReason === reasonF);
+
+  // Update counts
+  const activeCount = APP.data.customers.filter(c => !c.isPassive).length;
+  const passiveCount = APP.data.customers.filter(c => c.isPassive).length;
+  const activeCountEl = document.getElementById('custActiveCount');
+  const passiveCountEl = document.getElementById('custPassiveCount');
+  if(activeCountEl) activeCountEl.textContent = activeCount;
+  if(passiveCountEl) passiveCountEl.textContent = passiveCount || '';
+
+  const reasonLabels = {lost:'😔 Kaybedilmiş', closed:'🔒 Kapanan', seasonal:'🌙 Sezonluk', lowvolume:'📉 Düşük Hacim', other:'📝 Diğer'};
 
   tbody.innerHTML = filtered.map(c => {
     const rem = getRemainingDays(c);
     const remClass = getRemainingClass(rem);
     const remText = getRemainingText(rem);
+    const parentName = c.parentId ? (APP.data.customers.find(x=>x.id===c.parentId)?.name||'') : '';
+
+    if(isPassiveTab) {
+      return `<tr style="opacity:0.85;">
+        <td>
+          <strong>${c.name}</strong>
+          ${parentName ? '<br><span style="font-size:10px;color:var(--text-light);">🏢 '+parentName+'</span>' : ''}
+        </td>
+        <td>${c.city||'-'}/${c.district||'-'}</td>
+        <td>${c.contact||'-'}</td>
+        <td>${c.phone||'-'}</td>
+        <td>${c.type==='periodic'?'Periyodik':'Talep Üzerine'}</td>
+        <td>${c.type==='periodic'? c.period+' gün':'-'}</td>
+        <td>
+          <span class="wlist-tag tag-red" style="font-size:10px;">${reasonLabels[c.passiveReason]||'Belirtilmemiş'}</span>
+          ${c.passiveNote ? '<div style="font-size:10px;color:var(--text-light);margin-top:2px;">'+c.passiveNote.substring(0,40)+(c.passiveNote.length>40?'...':'')+'</div>' : ''}
+          ${c.passiveDate ? '<div style="font-size:9px;color:var(--text-light);">'+formatDate(c.passiveDate)+'</div>' : ''}
+        </td>
+        <td>${formatMoney(c.priceNakit||c.price)}</td>
+        <td>${c.barrels||0}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-sm btn-secondary" onclick="openCustomerModal('${c.id}')">Düzenle</button>
+          <button class="btn btn-sm" style="background:#8DC63F;color:#1B2A4A;" onclick="reactivateCustomer('${c.id}')" title="Tekrar aktifleştir">♻️</button>
+        </td>
+      </tr>`;
+    }
+
     return `<tr>
-      <td><strong>${c.name}</strong></td>
+      <td>
+        <strong>${c.name}</strong>
+        ${parentName ? '<br><span style="font-size:10px;color:var(--text-light);">🏢 '+parentName+'</span>' : ''}
+      </td>
       <td>${c.city||'-'}/${c.district||'-'}</td>
       <td>${c.contact||'-'}</td>
       <td>${c.phone||'-'}</td>
@@ -2863,8 +3013,23 @@ function renderCustomers() {
         <button class="btn btn-sm btn-secondary" onclick="viewCustomerDetail('${c.id}')">Detay</button>
       </td>
     </tr>`;
-  }).join('');
+  }).join('') || `<tr><td colspan="10" style="text-align:center;padding:30px;color:var(--text-light);">${isPassiveTab ? 'Pasif müşteri yok' : 'Müşteri bulunamadı'}</td></tr>`;
 }
+
+function reactivateCustomer(id) {
+  const c = APP.data.customers.find(x=>x.id===id);
+  if(!c) return;
+  if(!confirm(`"${c.name}" müşterisini tekrar AKTİF duruma almak istediğinize emin misiniz?\n\nZiyaret takibine geri dönecek.`)) return;
+  c.isPassive = false;
+  c.passiveReason = null;
+  c.passiveNote = '';
+  c.passiveDate = null;
+  saveData();
+  logAction('update', 'customer', `${c.name} — Pasiften aktife alındı`);
+  renderCustomers();
+  toast(`✅ ${c.name} tekrar aktif duruma alındı`, 'success');
+}
+
 function filterCustomers() { renderCustomers(); }
 
 function openCustomerModal(id) {
@@ -2881,6 +3046,13 @@ function openCustomerModal(id) {
       <div class="form-group"><label class="form-label">İlçe</label><input class="form-input" id="mCustDistrict" value="${c?.district||''}"></div>
     </div>
     <div class="form-group"><label class="form-label">Adres</label><textarea class="form-textarea" id="mCustAddress" rows="2">${c?.address||''}</textarea></div>
+    <div class="form-group">
+      <label class="form-label">🏢 Bağlı Olduğu Ana Firma <span style="font-weight:400;color:var(--text-light);font-size:10px;">(opsiyonel — cari hesap ana firmaya yazılır)</span></label>
+      <select class="form-select" id="mCustParentId">
+        <option value="">— Bağımsız İşletme —</option>
+        ${APP.data.customers.filter(x => !x.parentId && x.id !== c?.id).map(x => `<option value="${x.id}" ${c?.parentId===x.id?'selected':''}>${x.name} (${x.city||''})</option>`).join('')}
+      </select>
+    </div>
     <div class="form-row-3">
       <div class="form-group"><label class="form-label">Müşteri Tipi</label>
         <select class="form-select" id="mCustType" onchange="togglePeriod()">
@@ -2897,10 +3069,21 @@ function openCustomerModal(id) {
     </div>
     <div class="form-row-3">
       <div class="form-group"><label class="form-label">Yakıt Kartı No</label><input class="form-input" id="mCustFuelCard" value="${c?.fuelCardNo||''}"></div>
+      <div class="form-group"><label class="form-label">Tercih Edilen Ödeme</label>
+        <select class="form-select" id="mCustPreferredPayment">
+          <option value="" ${!c?.preferredPayment?'selected':''}>Belirtilmemiş</option>
+          <option value="Nakit" ${c?.preferredPayment==='Nakit'?'selected':''}>💵 Nakit</option>
+          <option value="Yakıt Kartı" ${c?.preferredPayment==='Yakıt Kartı'?'selected':''}>⛽ Yakıt Kartı</option>
+          <option value="Faturalı" ${c?.preferredPayment==='Faturalı'?'selected':''}>📄 Faturalı</option>
+          <option value="Karışık" ${c?.preferredPayment==='Karışık'?'selected':''}>🔀 Karışık</option>
+        </select>
+      </div>
       <div class="form-group"><label class="form-label">Sözleşme Tarihi</label><input class="form-input" type="date" id="mCustContract" value="${c?.contractDate||''}"></div>
-      <div class="form-group"><label class="form-label">Varil Sayısı</label><input class="form-input" type="number" id="mCustBarrels" value="${c?.barrels||0}" min="0"></div>
     </div>
-    <div class="form-group"><label class="form-label">Son Ziyaret Tarihi</label><input class="form-input" type="date" id="mCustLastVisit" value="${c?.lastVisit||''}"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Varil Sayısı</label><input class="form-input" type="number" id="mCustBarrels" value="${c?.barrels||0}" min="0"></div>
+      <div class="form-group"><label class="form-label">Son Ziyaret Tarihi</label><input class="form-input" type="date" id="mCustLastVisit" value="${c?.lastVisit||''}"></div>
+    </div>
     <hr style="margin:16px 0;border-color:var(--border);">
     <div class="form-group">
       <label class="form-label">Ödeme Kişileri (Ad Soyad — TC)</label>
@@ -2912,6 +3095,34 @@ function openCustomerModal(id) {
         </div>
       `).join('')}</div>
       <button class="btn btn-sm btn-secondary" onclick="addPaymentPerson()">+ Kişi Ekle</button>
+    </div>
+    <hr style="margin:16px 0;border-color:var(--border);">
+    <div style="background:${c?.isPassive?'#ffebee':'#f8f9fa'};padding:14px;border-radius:8px;border:1px solid ${c?.isPassive?'#ef9a9a':'var(--border)'};">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:${c?.isPassive?'12':'0'}px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:600;color:${c?.isPassive?'var(--danger)':'var(--text)'};">
+          <input type="checkbox" id="mCustIsPassive" ${c?.isPassive?'checked':''} onchange="togglePassiveFields()">
+          🚫 Pasif Müşteri
+        </label>
+        <span style="font-size:10px;color:var(--text-light);">(Ziyaret takibinden düşer)</span>
+      </div>
+      <div id="passiveFields" style="display:${c?.isPassive?'':'none'};">
+        <div class="form-group" style="margin-top:8px;">
+          <label class="form-label">Pasife Alma Nedeni *</label>
+          <select class="form-select" id="mCustPassiveReason">
+            <option value="" ${!c?.passiveReason?'selected':''}>Seçiniz...</option>
+            <option value="lost" ${c?.passiveReason==='lost'?'selected':''}>😔 Kaybedilmiş Müşteri (Rakibe Geçti)</option>
+            <option value="closed" ${c?.passiveReason==='closed'?'selected':''}>🔒 Kapanan İşletme</option>
+            <option value="seasonal" ${c?.passiveReason==='seasonal'?'selected':''}>🌙 Sezonluk Kapanma</option>
+            <option value="lowvolume" ${c?.passiveReason==='lowvolume'?'selected':''}>📉 Düşük Hacim / Ekonomik Değil</option>
+            <option value="other" ${c?.passiveReason==='other'?'selected':''}>📝 Diğer</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin-top:8px;">
+          <label class="form-label">Pasif Notu</label>
+          <textarea class="form-textarea" id="mCustPassiveNote" rows="2" placeholder="Neden pasife alındı, ne zaman tekrar kontrol edilecek...">${c?.passiveNote||''}</textarea>
+        </div>
+        ${c?.passiveDate ? `<div style="font-size:10px;color:var(--text-light);margin-top:4px;">Pasife alınma tarihi: ${formatDate(c.passiveDate)}</div>` : ''}
+      </div>
     </div>
   `;
   const footer = `
@@ -2927,6 +3138,12 @@ function togglePeriod() {
   const t = document.getElementById('mCustType')?.value;
   const g = document.getElementById('mPeriodGroup');
   if(g) g.style.display = t === 'onDemand' ? 'none' : '';
+}
+
+function togglePassiveFields() {
+  const chk = document.getElementById('mCustIsPassive');
+  const fields = document.getElementById('passiveFields');
+  if(fields) fields.style.display = chk?.checked ? '' : 'none';
 }
 
 function addPaymentPerson() {
@@ -2964,11 +3181,29 @@ function saveCustomer(id) {
     priceFatura: parseFloat(document.getElementById('mCustPriceFatura').value) || 0,
     price: parseFloat(document.getElementById('mCustPriceNakit').value) || 0,
     fuelCardNo: document.getElementById('mCustFuelCard').value.trim(),
+    preferredPayment: document.getElementById('mCustPreferredPayment')?.value || '',
+    parentId: document.getElementById('mCustParentId')?.value || null,
     contractDate: document.getElementById('mCustContract').value || null,
     lastVisit: document.getElementById('mCustLastVisit').value || null,
     barrels: parseInt(document.getElementById('mCustBarrels').value) || 0,
     paymentPersons,
   };
+
+  // Handle passive state
+  const isPassiveNow = document.getElementById('mCustIsPassive')?.checked || false;
+  const existingCustomer = id ? APP.data.customers.find(c=>c.id===id) : null;
+  data.isPassive = isPassiveNow;
+  if(isPassiveNow) {
+    data.passiveReason = document.getElementById('mCustPassiveReason')?.value || '';
+    data.passiveNote = document.getElementById('mCustPassiveNote')?.value?.trim() || '';
+    // Set passiveDate only if newly passivated
+    if(!existingCustomer?.isPassive) data.passiveDate = today();
+    else data.passiveDate = existingCustomer.passiveDate || today();
+  } else {
+    data.passiveReason = null;
+    data.passiveNote = '';
+    data.passiveDate = null;
+  }
 
   if(id) {
     const idx = APP.data.customers.findIndex(c=>c.id===id);
@@ -3058,7 +3293,7 @@ function renderFieldOps() {
 function foFilterCustomers() {
   const search = (document.getElementById('foSearch')?.value||'').toLowerCase();
   const cityF = document.getElementById('foCityFilter')?.value || '';
-  let customers = [...APP.data.customers];
+  let customers = APP.data.customers.filter(c => !c.isPassive);
   if(search) customers = customers.filter(c => c.name.toLowerCase().includes(search) || (c.contact||'').toLowerCase().includes(search) || (c.phone||'').includes(search));
   if(cityF) customers = customers.filter(c => c.city === cityF);
 
@@ -3262,10 +3497,11 @@ function foSaveCollection() {
   const custIdx = APP.data.customers.findIndex(x=>x.id===c.id);
   if(custIdx>=0) APP.data.customers[custIdx].lastVisit = today();
 
-  // Cari borç (KDV dahil fiyat, ek KDV yok)
+  // Cari borç (KDV dahil fiyat, ek KDV yok) — ana firma varsa ona yazılır
+  const cariCustId = getCariCustomerId(c.id);
   APP.data.cariTransactions.push({
-    id:uid(), customerId:c.id, date:today(), type:'alim',
-    description:'Alım: '+receiptNo+' ('+qty+' kg)', borc:subtotal, alacak:0
+    id:uid(), customerId:cariCustId, sourceCustomerId:c.id, date:today(), type:'alim',
+    description:'Alım: '+receiptNo+' ('+qty+' kg)'+(cariCustId!==c.id?' ['+c.name+']':''), borc:subtotal, alacak:0
   });
 
   saveData();
@@ -3467,11 +3703,12 @@ function foSavePayment() {
     receipt.vade = foState.vade;
   }
 
-  // Cari alacak
+  // Cari alacak — ana firma varsa ona yazılır
   const c = foState.selectedCustomer;
+  const paymentCariCustId = getCariCustomerId(c.id);
   APP.data.cariTransactions.push({
-    id:uid(), customerId:c.id, date:today(), type:'odeme',
-    description:(foState.paymentType==='nakit'?'Nakit':foState.paymentType==='eft'?'EFT':'Yakıt Kartı')+' ödeme',
+    id:uid(), customerId:paymentCariCustId, sourceCustomerId:c.id, date:today(), type:'odeme',
+    description:(foState.paymentType==='nakit'?'Nakit':foState.paymentType==='eft'?'EFT':'Yakıt Kartı')+' ödeme'+(paymentCariCustId!==c.id?' ['+c.name+']':''),
     borc:0, alacak:amount
   });
 
@@ -3937,7 +4174,7 @@ function renderCityTracking() {
   const tbody = document.getElementById('cityTrackBody');
   const cityF = document.getElementById('cityTrackFilter')?.value || '';
   const searchQ = (document.getElementById('cityTrackSearch')?.value||'').toLowerCase().trim();
-  let customers = APP.data.customers.filter(c => c.type === 'periodic');
+  let customers = APP.data.customers.filter(c => c.type === 'periodic' && !c.isPassive);
   if(cityF) customers = customers.filter(c => c.city === cityF);
   if(searchQ) customers = customers.filter(c =>
     (c.name||'').toLowerCase().includes(searchQ) ||
@@ -3946,9 +4183,25 @@ function renderCityTracking() {
     (c.contact||'').toLowerCase().includes(searchQ)
   );
 
-  // Sort by remaining days ascending
+  // Sort: Önce BUGÜN (0), sonra Gecikmiş (negative), sonra diğerleri artan sırada
   customers = customers.map(c => ({...c, remaining: getRemainingDays(c)}))
-    .sort((a,b) => (a.remaining||999) - (b.remaining||999));
+    .sort((a,b) => {
+      const ra = a.remaining;
+      const rb = b.remaining;
+      // null değerler en altta
+      if(ra === null && rb !== null) return 1;
+      if(rb === null && ra !== null) return -1;
+      if(ra === null && rb === null) return 0;
+      // BUGÜN (0) en üstte
+      if(ra === 0 && rb !== 0) return -1;
+      if(rb === 0 && ra !== 0) return 1;
+      // Sonra gecikmiş (en çok gecikmiş ilk)
+      if(ra < 0 && rb >= 0) return -1;
+      if(rb < 0 && ra >= 0) return 1;
+      if(ra < 0 && rb < 0) return ra - rb; // ikisi de gecikmiş, daha fazla gecikmiş üstte
+      // Son olarak normal sıralama (yakın → uzak)
+      return ra - rb;
+    });
 
   tbody.innerHTML = customers.map(c => {
     const remClass = getRemainingClass(c.remaining);
@@ -3964,7 +4217,7 @@ function renderCityTracking() {
   }).join('');
 
   // Also show on-demand customers
-  let onDemand = APP.data.customers.filter(c => c.type === 'onDemand' && (!cityF || c.city === cityF));
+  let onDemand = APP.data.customers.filter(c => c.type === 'onDemand' && !c.isPassive && (!cityF || c.city === cityF));
   if(searchQ) onDemand = onDemand.filter(c =>
     (c.name||'').toLowerCase().includes(searchQ) ||
     (c.city||'').toLowerCase().includes(searchQ) ||
@@ -4403,10 +4656,12 @@ function saveAddPayment(id) {
   r.paymentMethods.push({type, amount});
   r.vade = 'aninda';
 
-  // Add cari alacak
+  // Add cari alacak — ana firma varsa ona yazılır
+  const addPayCariId = getCariCustomerId(r.customerId);
+  const addPayChild = addPayCariId !== r.customerId ? APP.data.customers.find(x=>x.id===r.customerId) : null;
   APP.data.cariTransactions.push({
-    id:uid(), customerId:r.customerId, date:today(), type:'odeme',
-    description:(type==='nakit'?'Nakit':type==='eft'?'EFT':'Yakıt Kartı')+' ödeme ('+r.receiptNo+')',
+    id:uid(), customerId:addPayCariId, sourceCustomerId:r.customerId, date:today(), type:'odeme',
+    description:(type==='nakit'?'Nakit':type==='eft'?'EFT':'Yakıt Kartı')+' ödeme ('+r.receiptNo+')'+(addPayChild?' ['+addPayChild.name+']':''),
     borc:0, alacak:amount
   });
 
@@ -5614,14 +5869,21 @@ document.addEventListener('click', function(e) {
 function renderCariHesap() {
   const customerId = document.getElementById('cariSelectedCustomerId')?.value;
   if(!customerId) {
-    // Show all customers with balances
+    // Show all customers with balances — skip children, combine into parent
     const allBalances = [];
+    const processedParents = new Set();
     APP.data.customers.forEach(c => {
-      const txs = APP.data.cariTransactions.filter(t=>t.customerId===c.id);
+      // Skip child customers — they'll be included in parent
+      if(c.parentId) return;
+      
+      const groupIds = getGroupCustomerIds(c.id);
+      const isGroup = groupIds.length > 1;
+      const txs = APP.data.cariTransactions.filter(t => groupIds.includes(t.customerId));
       if(txs.length === 0) return;
       let netDebt = 0;
       txs.forEach(t => { netDebt += (t.borc||0) - (t.alacak||0); });
-      allBalances.push({name:c.name, city:c.city, id:c.id, netDebt, txCount:txs.length});
+      const childCount = groupIds.length - 1;
+      allBalances.push({name:c.name, city:c.city, id:c.id, netDebt, txCount:txs.length, isGroup, childCount});
     });
     allBalances.sort((a,b) => b.netDebt - a.netDebt);
 
@@ -5630,8 +5892,8 @@ function renderCariHesap() {
       ${allBalances.map(b => `
         <div class="wlist-item" style="cursor:pointer;" onclick="cariSelectCustomer('${b.id}')">
           <div class="wlist-left">
-            <div class="wlist-name">${b.name}</div>
-            <div class="wlist-sub">${b.city||''} — ${b.txCount} işlem</div>
+            <div class="wlist-name">${b.isGroup?'🏢 ':''}${b.name}</div>
+            <div class="wlist-sub">${b.city||''} — ${b.txCount} işlem${b.isGroup?' — '+b.childCount+' alt nokta':''}</div>
           </div>
           <div class="wlist-right"><span class="wlist-tag ${b.netDebt>0?'tag-red':b.netDebt<0?'tag-green':'tag-blue'}">${b.netDebt>0?'Borcumuz: '+formatMoney(b.netDebt):b.netDebt<0?'Alacağımız: '+formatMoney(Math.abs(b.netDebt)):formatMoney(0)}</span></div>
         </div>
@@ -5641,8 +5903,11 @@ function renderCariHesap() {
     return;
   }
 
-  // Show selected customer's transactions
-  const txs = APP.data.cariTransactions.filter(t=>t.customerId===customerId).sort((a,b)=>a.date.localeCompare(b.date));
+  // Show selected customer's transactions (including child locations if parent)
+  const groupIds = getGroupCustomerIds(customerId);
+  const isParentView = groupIds.length > 1;
+  const childNames = isParentView ? APP.data.customers.filter(c => c.parentId === customerId).map(c => c.name) : [];
+  const txs = APP.data.cariTransactions.filter(t => groupIds.includes(t.customerId)).sort((a,b)=>a.date.localeCompare(b.date));
   let runningDebt = 0; // positive = we owe them, negative = they owe us
   const rows = txs.map(t => {
     runningDebt += (t.borc||0) - (t.alacak||0);
@@ -5684,6 +5949,11 @@ function renderCariHesap() {
   const totalAlacak = txs.reduce((s,t) => s+(t.alacak||0), 0);
 
   document.getElementById('cariSummary').innerHTML = `
+    ${isParentView ? `
+    <div style="background:#e3f2fd;border-left:4px solid #1976d2;padding:10px 14px;border-radius:4px;margin-bottom:14px;font-size:12px;">
+      <strong>🏢 Grup Hesabı</strong> — Bu cari hesap ${childNames.length} alt noktayı da içerir:<br>
+      ${childNames.map(n => '<span style="background:rgba(25,118,210,0.1);padding:2px 8px;border-radius:10px;margin:2px;display:inline-block;">📍 '+n+'</span>').join(' ')}
+    </div>` : ''}
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center;">
       <div>
         <div style="font-size:11px;color:var(--text-secondary);text-transform:uppercase;">Toplam Borç</div>
@@ -6445,6 +6715,169 @@ function exportAuditLog() {
   toast('Log dosyası indirildi');
 }
 
+function downloadCustomerTemplate() {
+  const data = APP.data.customers.map(c => ({
+    'ID': c.id,
+    'İşletme Adı': c.name || '',
+    'İl': c.city || '',
+    'İlçe': c.district || '',
+    'Nakit Fiyat': c.priceNakit || c.price || '',
+    'Yakıt Kartı Fiyat': c.priceYakit || '',
+    'Faturalı Fiyat': c.priceFatura || '',
+    'Tercih Edilen Ödeme': c.preferredPayment || '',
+    'Yakıt Kartı No': c.fuelCardNo || '',
+    'Telefon': c.phone || '',
+    'Yetkili': c.contact || '',
+    'Periyot (gün)': c.period || '',
+    'Tip': c.type === 'periodic' ? 'Periyodik' : c.type === 'onDemand' ? 'Talep Üzerine' : '',
+    'Son Ziyaret': c.lastVisit || '',
+    'Notlar': c.notes || ''
+  }));
+  
+  const ws = XLSX.utils.json_to_sheet(data);
+  
+  // Set column widths
+  ws['!cols'] = [
+    {wch:10},{wch:30},{wch:12},{wch:15},
+    {wch:12},{wch:15},{wch:12},{wch:18},
+    {wch:15},{wch:14},{wch:20},{wch:10},
+    {wch:14},{wch:12},{wch:30}
+  ];
+  
+  // Create workbook
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Müşteriler');
+  
+  // Add instruction sheet
+  const instr = XLSX.utils.aoa_to_sheet([
+    ['EKOSA CRM — Müşteri Bilgi Şablonu'],
+    [''],
+    ['Bu dosyayı doldurup admin paneline yükleyerek müşteri bilgilerini toplu güncelleyebilirsiniz.'],
+    [''],
+    ['KURALLAR:'],
+    ['1. ID ve İşletme Adı sütunlarını DEĞİŞTİRMEYİN (eşleşme bunlara göre yapılır)'],
+    ['2. Boş bıraktığınız alanlar sistemdeki mevcut değeri korur'],
+    ['3. Tercih Edilen Ödeme: Nakit / Yakıt Kartı / Faturalı / Karışık yazınız'],
+    ['4. Tip: "Periyodik" veya "Talep Üzerine" yazınız'],
+    ['5. Fiyatları sadece sayı olarak girin (örn: 45 veya 45.50)'],
+    [''],
+    ['KDV KURALI:'],
+    ['• Nakit Fiyat: KDV YOKTUR (net fiyat)'],
+    ['• Yakıt Kartı / Faturalı: KDV DAHİL (%20)'],
+    [''],
+    ['Sorun yaşarsanız Ahmet Görken ile iletişime geçin.']
+  ]);
+  instr['!cols'] = [{wch:80}];
+  XLSX.utils.book_append_sheet(wb, instr, 'TALİMATLAR');
+  
+  // Download
+  XLSX.writeFile(wb, `Ekosa_Musteri_Sablonu_${today()}.xlsx`);
+  toast('✅ Şablon indirildi. Excel\'de açıp düzenleyin.', 'success');
+}
+
+function uploadCustomerTemplate(input) {
+  const file = input.files[0];
+  if(!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, {type:'array'});
+      const ws = wb.Sheets['Müşteriler'] || wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      
+      if(!rows.length) { toast('Dosyada veri bulunamadı','error'); return; }
+      
+      // Validation preview
+      let matched = 0, updated = 0, notFound = 0;
+      const changes = [];
+      
+      rows.forEach(row => {
+        const id = String(row['ID']||'').trim();
+        const name = String(row['İşletme Adı']||'').trim();
+        if(!id && !name) return;
+        
+        // Find customer by ID or name (case insensitive)
+        let cust = APP.data.customers.find(c => c.id === id);
+        if(!cust && name) {
+          cust = APP.data.customers.find(c => (c.name||'').toLowerCase() === name.toLowerCase());
+        }
+        
+        if(!cust) { notFound++; return; }
+        matched++;
+        
+        let changed = false;
+        const updates = {};
+        
+        // Only update if value is non-empty
+        const nakit = parseFloat(row['Nakit Fiyat']);
+        if(!isNaN(nakit) && nakit > 0 && cust.priceNakit !== nakit) { updates.priceNakit = nakit; changed = true; }
+        
+        const yakit = parseFloat(row['Yakıt Kartı Fiyat']);
+        if(!isNaN(yakit) && yakit > 0 && cust.priceYakit !== yakit) { updates.priceYakit = yakit; changed = true; }
+        
+        const fatura = parseFloat(row['Faturalı Fiyat']);
+        if(!isNaN(fatura) && fatura > 0 && cust.priceFatura !== fatura) { updates.priceFatura = fatura; changed = true; }
+        
+        const pref = String(row['Tercih Edilen Ödeme']||'').trim();
+        if(pref && cust.preferredPayment !== pref) { updates.preferredPayment = pref; changed = true; }
+        
+        const fuel = String(row['Yakıt Kartı No']||'').trim();
+        if(fuel && cust.fuelCardNo !== fuel) { updates.fuelCardNo = fuel; changed = true; }
+        
+        const phone = String(row['Telefon']||'').trim();
+        if(phone && cust.phone !== phone) { updates.phone = phone; changed = true; }
+        
+        const contact = String(row['Yetkili']||'').trim();
+        if(contact && cust.contact !== contact) { updates.contact = contact; changed = true; }
+        
+        const period = parseInt(row['Periyot (gün)']);
+        if(!isNaN(period) && period > 0 && cust.period !== period) { updates.period = period; changed = true; }
+        
+        const notes = String(row['Notlar']||'').trim();
+        if(notes && cust.notes !== notes) { updates.notes = notes; changed = true; }
+        
+        if(changed) {
+          Object.assign(cust, updates);
+          updated++;
+          changes.push(`• ${cust.name}: ${Object.keys(updates).join(', ')}`);
+        }
+      });
+      
+      input.value = ''; // reset input
+      
+      if(!matched) { toast('Hiç müşteri eşleşmedi. ID ve İşletme Adı alanlarını kontrol edin.','error'); return; }
+      
+      // Confirm before saving
+      let msg = `📊 Yükleme Özeti:\n\n`;
+      msg += `• Eşleşen müşteri: ${matched}\n`;
+      msg += `• Güncellenen: ${updated}\n`;
+      if(notFound) msg += `• Bulunamayan: ${notFound}\n`;
+      msg += `\nDeğişiklikler uygulansın mı?`;
+      
+      if(updated === 0) {
+        alert('Yüklenen dosyada değişiklik bulunamadı (tüm değerler zaten aynı veya boş).');
+        return;
+      }
+      
+      if(!confirm(msg)) return;
+      
+      saveData();
+      renderCustomers();
+      logAction('update', 'customer', `Toplu güncelleme: ${updated} müşteri`);
+      toast(`✅ ${updated} müşteri başarıyla güncellendi`, 'success');
+      
+      // Refresh the admin panel
+      switchAdminTab('customerTemplate');
+      
+    } catch(err) {
+      console.error(err);
+      toast('Dosya okunamadı: ' + err.message, 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
 function switchAdminTab(tab) {
   document.querySelectorAll('#page-admin .tab').forEach(t=>t.classList.remove('active'));
   event?.target?.classList.add('active');
@@ -6638,6 +7071,82 @@ function switchAdminTab(tab) {
       </div>
     `;
     renderAuditLogTable();
+  }
+  else if(tab==='customerTemplate') {
+    const periodicCount = APP.data.customers.filter(c=>c.type==='periodic').length;
+    const withPayment = APP.data.customers.filter(c=>c.preferredPayment).length;
+    const withFuel = APP.data.customers.filter(c=>c.fuelCardNo).length;
+    
+    content.innerHTML = `
+      <div class="widget" style="margin-top:20px;">
+        <div class="widget-header"><div class="widget-title">📥 Müşteri Bilgi Şablonu</div></div>
+        <div class="widget-body">
+          <p style="margin-bottom:14px;font-size:13px;line-height:1.7;">
+            Bu özellik ile mevcut ${APP.data.customers.length} müşterinin fiyat bilgilerini, tercih edilen ödeme şeklini ve yakıt kartı numaralarını toplu olarak güncelleyebilirsiniz.
+          </p>
+          
+          <div style="background:#e3f2fd;border-left:4px solid #1976d2;padding:12px 16px;border-radius:4px;margin-bottom:16px;">
+            <strong>💡 Nasıl Çalışır:</strong>
+            <ol style="margin:8px 0 0 20px;font-size:13px;">
+              <li><strong>Şablonu indir</strong> — Mevcut müşterilerin bulunduğu Excel dosyası oluşturulur</li>
+              <li><strong>Excel'de doldur</strong> — Nakit/Yakıt Kartı/Faturalı fiyatlar, kart no, tercih</li>
+              <li><strong>Dosyayı yükle</strong> — Sistem müşterileri isim eşleşmesine göre günceller</li>
+            </ol>
+          </div>
+          
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
+            <div style="background:var(--bg);padding:12px;border-radius:6px;text-align:center;">
+              <div style="font-size:20px;font-weight:700;color:var(--primary);">${APP.data.customers.length}</div>
+              <div style="font-size:11px;color:var(--text-secondary);">Toplam Müşteri</div>
+            </div>
+            <div style="background:var(--bg);padding:12px;border-radius:6px;text-align:center;">
+              <div style="font-size:20px;font-weight:700;color:var(--success);">${withPayment}</div>
+              <div style="font-size:11px;color:var(--text-secondary);">Ödeme Tercihi Kayıtlı</div>
+            </div>
+            <div style="background:var(--bg);padding:12px;border-radius:6px;text-align:center;">
+              <div style="font-size:20px;font-weight:700;color:var(--info);">${withFuel}</div>
+              <div style="font-size:11px;color:var(--text-secondary);">Yakıt Kartı Kayıtlı</div>
+            </div>
+          </div>
+          
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <button class="btn btn-primary" onclick="downloadCustomerTemplate()" style="flex:1;min-width:200px;padding:12px;">
+              📥 Şablonu İndir (Excel)
+            </button>
+            <label class="btn btn-primary" style="flex:1;min-width:200px;padding:12px;background:#8DC63F;color:#1B2A4A;cursor:pointer;text-align:center;">
+              📤 Doldurulmuş Şablonu Yükle
+              <input type="file" accept=".xlsx,.xls" onchange="uploadCustomerTemplate(this)" style="display:none;">
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      <div class="widget" style="margin-top:16px;">
+        <div class="widget-header"><div class="widget-title">📋 Şablondaki Alanlar</div></div>
+        <div class="widget-body" style="padding:0;">
+          <table class="data-table" style="font-size:12px;">
+            <thead><tr><th>Alan</th><th>Açıklama</th><th>Zorunlu mu?</th></tr></thead>
+            <tbody>
+              <tr><td><strong>ID</strong></td><td>Sistem kayıt numarası (değiştirmeyin!)</td><td>Evet</td></tr>
+              <tr><td><strong>İşletme Adı</strong></td><td>Eşleştirme için kullanılır (değiştirmeyin)</td><td>Evet</td></tr>
+              <tr><td><strong>İl</strong></td><td>Müşterinin ili</td><td>Hayır</td></tr>
+              <tr><td><strong>İlçe</strong></td><td>Müşterinin ilçesi</td><td>Hayır</td></tr>
+              <tr><td style="color:#2e7d32;"><strong>Nakit Fiyat</strong></td><td>₺/kg cinsinden (KDV yok)</td><td>Hayır</td></tr>
+              <tr><td style="color:#2e7d32;"><strong>Yakıt Kartı Fiyat</strong></td><td>₺/kg cinsinden (KDV dahil)</td><td>Hayır</td></tr>
+              <tr><td style="color:#2e7d32;"><strong>Faturalı Fiyat</strong></td><td>₺/kg cinsinden (KDV dahil)</td><td>Hayır</td></tr>
+              <tr><td style="color:#1976d2;"><strong>Tercih Edilen Ödeme</strong></td><td>Nakit / Yakıt Kartı / Faturalı / Karışık</td><td>Hayır</td></tr>
+              <tr><td style="color:#1976d2;"><strong>Yakıt Kartı No</strong></td><td>Shell kart numarası</td><td>Hayır</td></tr>
+              <tr><td>Telefon</td><td>İletişim numarası</td><td>Hayır</td></tr>
+              <tr><td>Periyot (gün)</td><td>Kaç günde bir ziyaret edilecek</td><td>Hayır</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <div style="background:#fff3e0;border-left:4px solid #ff9800;padding:12px 16px;border-radius:4px;margin-top:16px;font-size:12px;">
+        <strong>⚠️ Önemli:</strong> ID ve İşletme Adı sütunlarını değiştirmeyin. Eşleşme bu iki alana göre yapılır. Boş bıraktığınız alanlar sistemdeki mevcut değeri korur (silinmez).
+      </div>
+    `;
   }
   else if(tab==='dataMigration') {
     const oldDataExists = !!localStorage.getItem('ekosa_crm_data');
