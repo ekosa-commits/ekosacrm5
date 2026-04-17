@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="runDiagnostic()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v17.0</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v17.1</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -2470,6 +2470,7 @@ function showApp() {
   // Backup system
   checkBackupReminder();
   scheduleAutoBackup();
+  scheduleDailyReport();
 }
 
 // ============================================================
@@ -4568,8 +4569,8 @@ function renderProposals() {
     <td style="white-space:nowrap;">
       <button class="btn btn-sm btn-primary" onclick="viewProposalPDF('${p.id}')" title="Teklifi Görüntüle / PDF">👁️</button>
       <button class="btn btn-sm" style="background:#25D366;color:#fff;" onclick="shareProposalWhatsApp('${p.id}')" title="WhatsApp Paylaş">📲</button>
-      ${canEditRecord(p) ? `<button class="btn btn-sm btn-secondary" onclick="openProposalModal('${p.id}')" title="Düzenle">✏️</button>` : ''}
-      ${canDeleteRecord(p) ? `<button class="btn btn-sm btn-danger" onclick="deleteProposal('${p.id}')" title="Sil">🗑️</button>` : ''}
+      <button class="btn btn-sm btn-secondary" onclick="openProposalModal('${p.id}')" title="Düzenle">✏️</button>
+      <button class="btn btn-sm btn-danger" onclick="deleteProposal('${p.id}')" title="Sil">🗑️</button>
     </td>
   </tr>`;
   }).join('');
@@ -5720,7 +5721,7 @@ function renderVehicles() {
       <div class="widget-body">
         <div style="font-size:13px;margin-bottom:4px;"><strong>Personel:</strong> ${(v.personnel||[]).join(', ')||'-'}</div>
         ${todayKg>0?`<div style="font-size:12px;color:var(--text-secondary);">Bugün: ${todayKg} kg (${todayRecs.length} alım) — ${formatMoney(todayAmt)}</div>`:''}
-        ${avgPrice>0?`<div style="font-size:12px;color:var(--text-secondary);">Ort. Alış: ${formatMoney(avgPrice)}/kg</div>`:''}
+        ${(v.stock||0)>0 && avgPrice>0?`<div style="font-size:12px;color:var(--text-secondary);">Ort. Alış: ${formatMoney(avgPrice)}/kg</div>`:''}
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
           <button class="btn btn-sm btn-primary" onclick="emptyVehicle('${v.id}')" ${(v.stock||0)<=0?'disabled':''}>Depoya Boşalt</button>
           <button class="btn btn-sm btn-secondary" onclick="showVehicleDetail('${v.id}')">📊 Detay</button>
@@ -5736,7 +5737,7 @@ function showVehicleDetail(vehicleId) {
   if(!v) return;
   const todayStr = today();
   const todayRecs = APP.data.receipts.filter(r=>r.vehicleId===vehicleId && r.date===todayStr);
-  const allRecs = APP.data.receipts.filter(r=>r.vehicleId===vehicleId);
+  const allRecs = APP.data.receipts.filter(r=>r.vehicleId===vehicleId).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 
   // Avg price with nakit/yakıt adjustment
   let adjTotal=0, adjKg=0;
@@ -5751,6 +5752,20 @@ function showVehicleDetail(vehicleId) {
     const isYakit = r.priceType==='yakit_karti' || r.priceType==='fatura' || r.paymentMethods?.some(pm=>pm.type==='yakit_karti');
     const adjPrice = isYakit ? r.unitPrice*0.8 : r.unitPrice;
     return `<tr><td>${r.customerName}</td><td>${r.quantity} kg</td><td>${formatMoney(r.unitPrice)}/kg</td><td>${isYakit?formatMoney(adjPrice)+'/kg':'-'}</td><td>${formatMoney(r.total)}</td></tr>`;
+  }).join('');
+
+  // All collections grouped by date (last 30 days)
+  const last30 = allRecs.slice(0, 100);
+  const dateGroups = {};
+  last30.forEach(r => {
+    if(!dateGroups[r.date]) dateGroups[r.date] = [];
+    dateGroups[r.date].push(r);
+  });
+  const allList = Object.entries(dateGroups).sort((a,b)=>b[0].localeCompare(a[0])).map(([date, recs]) => {
+    const dayKg = recs.reduce((s,r)=>s+r.quantity,0);
+    const dayAmt = recs.reduce((s,r)=>s+(r.total||0),0);
+    return `<tr style="background:var(--bg);font-weight:600;"><td colspan="4">📅 ${formatDate(date)} — ${recs.length} alım</td><td>${formatKg(dayKg)}</td><td>${formatMoney(dayAmt)}</td></tr>` +
+      recs.map(r => `<tr><td></td><td colspan="2">${r.customerName||'-'}</td><td>${formatMoney(r.unitPrice)}/kg</td><td>${r.quantity} kg</td><td>${formatMoney(r.total)}</td></tr>`).join('');
   }).join('');
 
   const body = `
@@ -5774,7 +5789,12 @@ function showVehicleDetail(vehicleId) {
       <tbody>${todayList}</tbody>
       <tfoot><tr style="font-weight:700;background:var(--bg);"><td>TOPLAM</td><td>${todayRecs.reduce((s,r)=>s+r.quantity,0)} kg</td><td colspan="2"></td><td>${formatMoney(todayRecs.reduce((s,r)=>s+(r.total||0),0))}</td></tr></tfoot>
     </table></div>` : '<div style="color:var(--text-light);font-size:13px;">Bugün alım yok</div>'}
-    <div style="font-size:10px;color:var(--text-light);margin-top:12px;">* Düz. Fiyat: Yakıt kartı/faturalı alımlarda %20 düşülmüş ortalama hesaplama fiyatı</div>
+    <h4 style="font-size:13px;margin:16px 0 8px;">📋 Tüm Alım Geçmişi (Son ${last30.length} kayıt)</h4>
+    ${last30.length ? `<div class="data-table-wrap" style="max-height:300px;overflow-y:auto;"><table class="data-table">
+      <thead><tr><th></th><th colspan="2">İşletme</th><th>Fiyat</th><th>Miktar</th><th>Tutar</th></tr></thead>
+      <tbody>${allList}</tbody>
+    </table></div>` : '<div style="color:var(--text-light);font-size:13px;">Alım kaydı yok</div>'}
+    <div style="font-size:10px;color:var(--text-light);margin-top:12px;">* Düz. Fiyat: Yakıt kartı/faturalı alımlarda %20 düşülmüş fiyat</div>
   `;
   openModal('🚛 '+v.plate+' — Araç Detay', body, '<button class="btn btn-secondary" onclick="closeModal()">Kapat</button>', '700px');
 }
@@ -5867,11 +5887,14 @@ function doEmptyVehicle(vehicleId, depotId) {
   // Update depot
   depot.stock = (depot.stock||0) + amount;
   depot.totalCost = (depot.totalCost||0) + totalCost;
+  saveToFirebase('depots', depot);
 
   // Reset vehicle
   v.stock = 0;
+  saveToFirebase('vehicles', v);
 
   saveData(); closeModal(); renderVehicles();
+  if(APP.currentPage === 'depot') renderDepot();
   toast(`${formatKg(amount)} → ${depot.name} depoya aktarıldı`);
 }
 
@@ -7079,8 +7102,11 @@ function generateDayReport() {
 
   const dayReceipts = APP.data.receipts.filter(r=>r.date===date);
   const dayVisits = APP.data.visits.filter(v=>v.date===date);
+  const dayTediye = APP.data.tediye.filter(t=>t.date===date);
+  const dayPayments = APP.data.cariTransactions.filter(t=>t.date===date && t.type==='odeme');
+  const notCollected = dayVisits.filter(v=>!v.collected);
 
-  // Group by vehicle
+  // Group receipts by vehicle
   const byVehicle = {};
   dayReceipts.forEach(r => {
     const key = r.vehiclePlate||'Belirtilmemiş';
@@ -7090,40 +7116,99 @@ function generateDayReport() {
 
   let html = `<h3 style="margin-bottom:16px;">📅 ${formatDate(date)} — Gün Sonu Raporu</h3>`;
 
+  // Summary cards
+  const grandTotalKg = dayReceipts.reduce((s,r)=>s+r.quantity,0);
+  const grandTotalAmount = dayReceipts.reduce((s,r)=>s+(r.grandTotal||r.total||0),0);
+  const totalPaid = dayPayments.reduce((s,t)=>s+(t.alacak||0),0);
+  html += `
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px;">
+      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:var(--radius-sm);">
+        <div style="font-size:18px;font-weight:700;color:var(--accent);">${dayReceipts.length}</div>
+        <div style="font-size:10px;color:var(--text-secondary);">Alım</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:var(--radius-sm);">
+        <div style="font-size:18px;font-weight:700;color:var(--info);">${formatKg(grandTotalKg)}</div>
+        <div style="font-size:10px;color:var(--text-secondary);">Toplam KG</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:var(--radius-sm);">
+        <div style="font-size:18px;font-weight:700;color:var(--warning);">${formatMoney(grandTotalAmount)}</div>
+        <div style="font-size:10px;color:var(--text-secondary);">Alım Tutarı</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:var(--radius-sm);">
+        <div style="font-size:18px;font-weight:700;color:var(--success);">${formatMoney(totalPaid)}</div>
+        <div style="font-size:10px;color:var(--text-secondary);">Ödeme</div>
+      </div>
+    </div>`;
+
+  // Receipts by vehicle
   if(Object.keys(byVehicle).length === 0) {
     html += '<div class="widget"><div class="widget-empty">Bu tarihte alım kaydı yok</div></div>';
   } else {
     Object.entries(byVehicle).forEach(([plate, recs]) => {
       const totalKg = recs.reduce((s,r)=>s+r.quantity,0);
-      const totalAmount = recs.reduce((s,r)=>s+r.grandTotal,0);
+      const totalAmount = recs.reduce((s,r)=>s+(r.grandTotal||r.total||0),0);
       const avgPrice = totalKg>0 ? totalAmount/totalKg : 0;
-
       html += `
         <div class="widget" style="margin-bottom:16px;">
           <div class="widget-header">
-            <div class="widget-title">🚛 ${plate}</div>
+            <div class="widget-title">🚛 ${plate} — Alımlar</div>
             <span class="wlist-tag tag-blue">${formatKg(totalKg)} — Ort: ${formatMoney(avgPrice)}/kg</span>
           </div>
-          <div class="data-table-wrap">
-            <table class="data-table">
-              <thead><tr><th>İşletme</th><th>Miktar</th><th>Fiyat</th><th>Toplam</th></tr></thead>
-              <tbody>${recs.map(r=>`<tr><td>${r.customerName}</td><td>${r.quantity} kg</td><td>${formatMoney(r.unitPrice)}/kg</td><td>${formatMoney(r.grandTotal)}</td></tr>`).join('')}</tbody>
-            </table>
-          </div>
-        </div>
-      `;
+          <div class="data-table-wrap"><table class="data-table">
+            <thead><tr><th>İşletme</th><th>Miktar</th><th>Fiyat</th><th>Toplam</th></tr></thead>
+            <tbody>${recs.map(r=>`<tr><td>${r.customerName}</td><td>${r.quantity} kg</td><td>${formatMoney(r.unitPrice)}/kg</td><td>${formatMoney(r.grandTotal||r.total||0)}</td></tr>`).join('')}</tbody>
+          </table></div>
+        </div>`;
     });
-
-    const grandTotalKg = dayReceipts.reduce((s,r)=>s+r.quantity,0);
-    const grandTotalAmount = dayReceipts.reduce((s,r)=>s+r.grandTotal,0);
-    html += `
-      <div class="widget">
-        <div class="widget-body" style="text-align:center;">
-          <div style="font-size:14px;font-weight:700;">GÜN TOPLAMI: ${formatKg(grandTotalKg)} — ${formatMoney(grandTotalAmount)}</div>
-        </div>
-      </div>
-    `;
   }
+
+  // Payments
+  if(dayPayments.length > 0 || dayTediye.length > 0) {
+    html += `
+      <div class="widget" style="margin-bottom:16px;">
+        <div class="widget-header"><div class="widget-title">💰 Ödemeler</div><span class="wlist-tag tag-green">${formatMoney(totalPaid)}</span></div>
+        <div class="data-table-wrap"><table class="data-table">
+          <thead><tr><th>İşletme</th><th>Açıklama</th><th>Tutar</th></tr></thead>
+          <tbody>${dayPayments.map(t => {
+            const cName = APP.data.customers.find(c=>c.id===t.customerId || c.id===t.sourceCustomerId)?.name || '-';
+            return `<tr><td>${cName}</td><td>${t.description||'-'}</td><td style="font-weight:600;color:var(--success);">${formatMoney(t.alacak||0)}</td></tr>`;
+          }).join('')}</tbody>
+        </table></div>
+      </div>`;
+  }
+
+  // Tediye makbuzları
+  if(dayTediye.length > 0) {
+    html += `
+      <div class="widget" style="margin-bottom:16px;">
+        <div class="widget-header"><div class="widget-title">📝 Tediye Makbuzları</div></div>
+        <div class="data-table-wrap"><table class="data-table">
+          <thead><tr><th>No</th><th>Kişi</th><th>TC</th><th>Tutar</th></tr></thead>
+          <tbody>${dayTediye.map(t => `<tr><td>${t.tediyeNo||'-'}</td><td>${t.personName||'-'}</td><td>${t.personTC||'-'}</td><td style="font-weight:600;">${formatMoney(t.amount)}</td></tr>`).join('')}</tbody>
+        </table></div>
+      </div>`;
+  }
+
+  // Not collected visits
+  if(notCollected.length > 0) {
+    html += `
+      <div class="widget" style="margin-bottom:16px;">
+        <div class="widget-header"><div class="widget-title">❌ Alım Yapılmayan Ziyaretler (${notCollected.length})</div></div>
+        <div class="data-table-wrap"><table class="data-table">
+          <thead><tr><th>İşletme</th><th>Doluluk</th><th>Sebep</th></tr></thead>
+          <tbody>${notCollected.map(v => `<tr><td>${v.customerName||'-'}</td><td>${v.fillLevel||'-'}</td><td>${v.reason||'-'}</td></tr>`).join('')}</tbody>
+        </table></div>
+      </div>`;
+  }
+
+  // Grand total
+  html += `
+    <div class="widget">
+      <div class="widget-body" style="text-align:center;">
+        <div style="font-size:14px;font-weight:700;">GÜN TOPLAMI: ${formatKg(grandTotalKg)} alım — ${formatMoney(grandTotalAmount)} tutar — ${formatMoney(totalPaid)} ödeme</div>
+        <div style="font-size:12px;color:var(--text-secondary);margin-top:4px;">${dayVisits.length} ziyaret (${dayReceipts.length} alımlı, ${notCollected.length} alımsız)</div>
+      </div>
+    </div>`;
 
   contentEl.innerHTML = html;
 }
@@ -9232,6 +9317,163 @@ function checkBackupReminder() {
       }
     }
   } catch(e) {}
+}
+
+// ============================================================
+// DAILY EMAIL REPORT (21:30 — ekosa@ekosacevre.com)
+// ============================================================
+let _dailyReportTimer = null;
+
+function scheduleDailyReport() {
+  if(_dailyReportTimer) clearInterval(_dailyReportTimer);
+  _dailyReportTimer = setInterval(() => {
+    const now = new Date();
+    const hhmm = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+    const lastSent = localStorage.getItem('ekosa_daily_report_date');
+    if(hhmm === '21:30' && lastSent !== today()) {
+      localStorage.setItem('ekosa_daily_report_date', today());
+      sendDailyReport();
+    }
+  }, 60000);
+}
+
+function generateDailyReportText(date) {
+  const d = date || today();
+  const dayReceipts = APP.data.receipts.filter(r => r.date === d);
+  const dayVisits = APP.data.visits.filter(v => v.date === d);
+  const dayTediye = APP.data.tediye.filter(t => t.date === d);
+  const dayPayments = APP.data.cariTransactions.filter(t => t.date === d && t.type === 'odeme');
+  const notCollected = dayVisits.filter(v => !v.collected);
+  const newCustomers = APP.data.customers.filter(c => c.createdAt && c.createdAt.startsWith(d));
+  
+  const totalKg = dayReceipts.reduce((s,r) => s + r.quantity, 0);
+  const totalAmount = dayReceipts.reduce((s,r) => s + (r.grandTotal || r.total || 0), 0);
+  const totalPaid = dayPayments.reduce((s,t) => s + (t.alacak || 0), 0);
+  
+  let report = `📊 EKOSA CRM — GÜNLÜK RAPOR\n`;
+  report += `📅 ${formatDate(d)}\n`;
+  report += `${'═'.repeat(35)}\n\n`;
+  
+  // Summary
+  report += `📋 ÖZET\n`;
+  report += `• Toplam Ziyaret: ${dayVisits.length}\n`;
+  report += `• Alım Yapılan: ${dayReceipts.length} işletme\n`;
+  report += `• Alım Yapılmayan: ${notCollected.length} işletme\n`;
+  report += `• Toplam Alım: ${totalKg} kg\n`;
+  report += `• Alım Tutarı: ${formatMoney(totalAmount)}\n`;
+  report += `• Ödeme Yapılan: ${formatMoney(totalPaid)}\n`;
+  if(newCustomers.length) report += `• Yeni Müşteri: ${newCustomers.length}\n`;
+  report += `\n`;
+  
+  // Collections by vehicle
+  if(dayReceipts.length > 0) {
+    report += `🚛 ALIMLAR\n`;
+    report += `${'─'.repeat(35)}\n`;
+    const byVehicle = {};
+    dayReceipts.forEach(r => {
+      const key = r.vehiclePlate || 'Belirtilmemiş';
+      if(!byVehicle[key]) byVehicle[key] = [];
+      byVehicle[key].push(r);
+    });
+    Object.entries(byVehicle).forEach(([plate, recs]) => {
+      const vKg = recs.reduce((s,r) => s + r.quantity, 0);
+      const vAmt = recs.reduce((s,r) => s + (r.grandTotal || r.total || 0), 0);
+      report += `\n🚛 ${plate} (${vKg} kg — ${formatMoney(vAmt)})\n`;
+      recs.forEach(r => {
+        report += `  • ${r.customerName}: ${r.quantity} kg × ${formatMoney(r.unitPrice)} = ${formatMoney(r.grandTotal || r.total || 0)}\n`;
+      });
+    });
+    report += `\n`;
+  }
+  
+  // Payments
+  if(dayPayments.length > 0) {
+    report += `💰 ÖDEMELER\n`;
+    report += `${'─'.repeat(35)}\n`;
+    dayPayments.forEach(t => {
+      const cName = APP.data.customers.find(c => c.id === t.customerId || c.id === t.sourceCustomerId)?.name || '-';
+      report += `  • ${cName}: ${formatMoney(t.alacak || 0)} (${t.description || '-'})\n`;
+    });
+    report += `\n`;
+  }
+  
+  // Tediye
+  if(dayTediye.length > 0) {
+    report += `📝 TEDİYE MAKBUZLARI\n`;
+    report += `${'─'.repeat(35)}\n`;
+    dayTediye.forEach(t => {
+      report += `  • ${t.tediyeNo}: ${t.personName || '-'} — ${formatMoney(t.amount)}\n`;
+    });
+    report += `\n`;
+  }
+  
+  // Not collected
+  if(notCollected.length > 0) {
+    report += `❌ ALIM YAPILMAYAN ZİYARETLER\n`;
+    report += `${'─'.repeat(35)}\n`;
+    notCollected.forEach(v => {
+      report += `  • ${v.customerName}: ${v.fillLevel || '-'} — ${v.reason || '-'}\n`;
+    });
+    report += `\n`;
+  }
+  
+  // New customers
+  if(newCustomers.length > 0) {
+    report += `🆕 YENİ MÜŞTERİLER\n`;
+    report += `${'─'.repeat(35)}\n`;
+    newCustomers.forEach(c => {
+      report += `  • ${c.name} (${c.city || '-'})\n`;
+    });
+    report += `\n`;
+  }
+  
+  // Vehicle status
+  report += `🚛 ARAÇ DURUMLARI\n`;
+  report += `${'─'.repeat(35)}\n`;
+  APP.data.vehicles.forEach(v => {
+    report += `  • ${v.plate}: ${v.stock || 0} kg\n`;
+  });
+  
+  report += `\n${'═'.repeat(35)}\n`;
+  report += `Ekosa Çevre Çözümleri — CRM v17\n`;
+  
+  return report;
+}
+
+function sendDailyReport() {
+  const report = generateDailyReportText();
+  const subject = `Ekosa Günlük Rapor — ${formatDate(today())}`;
+  const to = 'ekosa@ekosacevre.com';
+  
+  // Try navigator.share first (mobile)
+  if(navigator.share) {
+    navigator.share({
+      title: subject,
+      text: report
+    }).then(() => {
+      toast('✅ Günlük rapor paylaşıldı');
+    }).catch(() => {
+      // Fallback to mailto
+      openMailtoReport(to, subject, report);
+    });
+  } else {
+    openMailtoReport(to, subject, report);
+  }
+  
+  toast('📧 Günlük rapor hazırlandı — ' + formatDate(today()), 'info');
+}
+
+function openMailtoReport(to, subject, body) {
+  // mailto: has ~2000 char limit, truncate if needed
+  const maxLen = 1800;
+  const trimmedBody = body.length > maxLen ? body.substring(0, maxLen) + '\n...(devamı için CRM\'den bakın)' : body;
+  const mailto = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(trimmedBody)}`;
+  window.open(mailto);
+}
+
+// Manual trigger from admin or anywhere
+function sendDailyReportNow() {
+  sendDailyReport();
 }
 
 // ============================================================
