@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="runDiagnostic()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.3</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.4</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -1905,7 +1905,7 @@ function logAction(action, entity, details) {
 
   // Sync to Firebase
   if(isFirebaseReady) {
-    db.collection('actionLog').doc(entry.id).set(entry).catch(e => console.warn('log sync:', e));
+    db.collection('actionLog').doc(entry.id).set(sanitize(entry)).catch(e => console.warn('log sync:', e));
   }
 }
 
@@ -1974,11 +1974,25 @@ let _lastSynced = {}; // Shadow copy: { collectionName: { itemId: jsonString } }
 let _syncQueue = []; // Failed writes queue for retry
 let _syncStats = { ok: 0, fail: 0, lastSync: null };
 
+// Remove undefined values that Firestore rejects
+function sanitize(obj) {
+  if(!obj || typeof obj !== 'object') return obj;
+  const clean = {};
+  for(const [k,v] of Object.entries(obj)) {
+    if(v === undefined) continue; // Firestore rejects undefined
+    if(v !== null && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date)) {
+      clean[k] = sanitize(v);
+    } else {
+      clean[k] = v;
+    }
+  }
+  return clean;
+}
+
 function saveData() {
   localStorage.setItem('ekosa_crm_v14', JSON.stringify(APP.data));
   if(!isFirebaseReady || !APP.currentUser) { updateSyncBadge('offline'); return; }
 
-  // Auto-detect changed items and sync only those
   const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
     'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions','actionLog'];
   
@@ -1993,25 +2007,37 @@ function saveData() {
       const json = JSON.stringify(item);
       if(_lastSynced[col][item.id] !== json) {
         writeCount++;
-        // Changed or new — sync immediately
-        db.collection(col).doc(item.id).set(item).then(() => {
-          _syncStats.ok++;
-          _lastSynced[col][item.id] = json;
-          _syncStats.lastSync = new Date();
-          updateSyncBadge('ok');
-        }).catch(e => {
-          _syncStats.fail++;
-          console.error('❌ Firebase yazma hatası:', col, item.id, e);
-          // Add to retry queue
-          _syncQueue.push({ col, item: {...item}, retries: 0 });
-          updateSyncBadge('error');
-        });
+        const cleanItem = sanitize(item);
+        db.collection(col).doc(item.id).set(cleanItem)
+          .then(() => {
+            _syncStats.ok++;
+            _lastSynced[col][item.id] = json;
+            _syncStats.lastSync = new Date();
+            updateSyncBadge('ok');
+          })
+          .catch(e => {
+            _syncStats.fail++;
+            console.error('❌ sync HATA:', col, item.id, e.code, e.message);
+            _syncQueue.push({ col, item: cleanItem, retries: 0 });
+            updateSyncBadge('error');
+            toast('❌ Firebase yazma hatası: ' + col + ' — ' + (e.message||'').substring(0,60), 'error');
+          });
+      }
+    }
+    
+    // Detect deleted items — remove from Firebase if in _lastSynced but not in current data
+    const currentIds = new Set(items.filter(i=>i?.id).map(i=>i.id));
+    for(const oldId of Object.keys(_lastSynced[col]||{})) {
+      if(!currentIds.has(oldId)) {
+        db.collection(col).doc(oldId).delete().catch(()=>{});
+        delete _lastSynced[col][oldId];
       }
     }
   }
+  
   if(writeCount > 0) {
     updateSyncBadge('syncing');
-    console.log('🔄 Firebase sync: ' + writeCount + ' öğe yazılıyor...');
+    console.log('🔄 Firebase sync: ' + writeCount + ' öğe');
   }
   syncSettings();
 }
@@ -2049,7 +2075,7 @@ async function forceSync() {
       _syncQueue = [];
       for(const q of queue) {
         try {
-          await db.collection(q.col).doc(q.item.id).set(q.item);
+          await db.collection(q.col).doc(q.item.id).set(sanitize(q.item));
           _syncStats.ok++;
         } catch(e) {
           if(q.retries < 3) { q.retries++; _syncQueue.push(q); }
@@ -2092,7 +2118,7 @@ function startPeriodicSync() {
 // Sync a single item immediately (for direct calls)
 function syncItem(collection, item) {
   if(!isFirebaseReady || !item?.id) return;
-  db.collection(collection).doc(item.id).set(item).then(() => {
+  db.collection(collection).doc(item.id).set(sanitize(item)).then(() => {
     updateSyncBadge('ok');
   }).catch(e => {
     console.warn('syncItem error:', e);
@@ -2143,7 +2169,7 @@ async function syncToFirestore() {
       if(!APP.data[col] || !Array.isArray(APP.data[col])) continue;
       for(const item of APP.data[col]) {
         if(!item?.id) continue;
-        batch.set(db.collection(col).doc(item.id), item);
+        batch.set(db.collection(col).doc(item.id), sanitize(item));
         count++;
         if(count >= 450) {
           await batch.commit();
@@ -2312,7 +2338,7 @@ async function clearAndPushToFirestore() {
       if(APP.data[col] && Array.isArray(APP.data[col])) {
         for(const item of APP.data[col]) {
           if(!item || typeof item !== 'object' || !item.id) continue;
-          try { await db.collection(col).doc(item.id).set(item); } catch(e) {}
+          try { await db.collection(col).doc(item.id).set(sanitize(item)); } catch(e) {}
         }
       }
     }
