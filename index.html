@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="runDiagnostic()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.4</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.5</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -1991,55 +1991,27 @@ function sanitize(obj) {
 
 function saveData() {
   localStorage.setItem('ekosa_crm_v14', JSON.stringify(APP.data));
-  if(!isFirebaseReady || !APP.currentUser) { updateSyncBadge('offline'); return; }
-
-  const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
-    'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions','actionLog'];
-  
-  let writeCount = 0;
-  for(const col of collections) {
-    const items = APP.data[col];
-    if(!items || !Array.isArray(items)) continue;
-    if(!_lastSynced[col]) _lastSynced[col] = {};
-    
-    for(const item of items) {
-      if(!item?.id) continue;
-      const json = JSON.stringify(item);
-      if(_lastSynced[col][item.id] !== json) {
-        writeCount++;
-        const cleanItem = sanitize(item);
-        db.collection(col).doc(item.id).set(cleanItem)
-          .then(() => {
-            _syncStats.ok++;
-            _lastSynced[col][item.id] = json;
-            _syncStats.lastSync = new Date();
-            updateSyncBadge('ok');
-          })
-          .catch(e => {
-            _syncStats.fail++;
-            console.error('❌ sync HATA:', col, item.id, e.code, e.message);
-            _syncQueue.push({ col, item: cleanItem, retries: 0 });
-            updateSyncBadge('error');
-            toast('❌ Firebase yazma hatası: ' + col + ' — ' + (e.message||'').substring(0,60), 'error');
-          });
-      }
-    }
-    
-    // Detect deleted items — remove from Firebase if in _lastSynced but not in current data
-    const currentIds = new Set(items.filter(i=>i?.id).map(i=>i.id));
-    for(const oldId of Object.keys(_lastSynced[col]||{})) {
-      if(!currentIds.has(oldId)) {
-        db.collection(col).doc(oldId).delete().catch(()=>{});
-        delete _lastSynced[col][oldId];
-      }
-    }
-  }
-  
-  if(writeCount > 0) {
-    updateSyncBadge('syncing');
-    console.log('🔄 Firebase sync: ' + writeCount + ' öğe');
-  }
   syncSettings();
+}
+
+// DIRECT: Write single item to Firebase (instant — 1 document)
+function saveToFirebase(col, item) {
+  if(!isFirebaseReady || !APP.currentUser || !item?.id) return;
+  db.collection(col).doc(item.id).set(sanitize(item)).then(() => {
+    _syncStats.ok++;
+    _syncStats.lastSync = new Date();
+    updateSyncBadge('ok');
+  }).catch(e => {
+    _syncStats.fail++;
+    console.error('❌ Firebase:', col, item.id, e.message);
+    updateSyncBadge('error');
+  });
+}
+
+// DIRECT: Write multiple items
+function saveMultiToFirebase(col, items) {
+  if(!isFirebaseReady || !APP.currentUser) return;
+  items.forEach(item => { if(item?.id) saveToFirebase(col, item); });
 }
 
 function updateSyncBadge(status) {
@@ -3480,10 +3452,12 @@ function saveCustomer(id) {
 
   if(id) {
     const idx = APP.data.customers.findIndex(c=>c.id===id);
-    if(idx>=0) APP.data.customers[idx] = {...APP.data.customers[idx], ...data};
+    if(idx>=0) { APP.data.customers[idx] = {...APP.data.customers[idx], ...data}; saveToFirebase('customers', APP.data.customers[idx]); }
     logAction('update', 'customer', `${data.name} - ${data.city||''}`);
   } else {
-    APP.data.customers.push({id:uid(), ...data, createdAt:today()});
+    const newCust = {id:uid(), ...data, createdAt:today()};
+    APP.data.customers.push(newCust);
+    saveToFirebase('customers', newCust);
     logAction('create', 'customer', `${data.name} - ${data.city||''}`);
   }
 
@@ -3750,6 +3724,7 @@ function foSaveCollection() {
     createdAt: new Date().toISOString()
   };
   APP.data.receipts.push(receipt);
+  saveToFirebase('receipts', receipt);
   foState.lastReceipt = receipt;
   logAction('create', 'receipt', `${receipt.receiptNo} - ${receipt.customerName} - ${qty}kg x ${formatMoney(price)} = ${formatMoney(subtotal)}`);
 
@@ -3764,15 +3739,16 @@ function foSaveCollection() {
     gps:null, createdAt: new Date().toISOString()
   };
   APP.data.visits.push(visit);
+  saveToFirebase('visits', visit);
   foState.lastVisit = visit;
   logAction('create', 'visit', `${c.name} - Alım: ${qty}kg`);
 
   // Update vehicle stock
-  if(vehicle) vehicle.stock = (vehicle.stock||0) + qty;
+  if(vehicle) { vehicle.stock = (vehicle.stock||0) + qty; saveToFirebase('vehicles', vehicle); }
 
   // Update customer
   const custIdx = APP.data.customers.findIndex(x=>x.id===c.id);
-  if(custIdx>=0) APP.data.customers[custIdx].lastVisit = foDate;
+  if(custIdx>=0) { APP.data.customers[custIdx].lastVisit = foDate; saveToFirebase('customers', APP.data.customers[custIdx]); }
 
   // Cari borç (KDV dahil fiyat, ek KDV yok) — ana firma varsa ona yazılır
   const cariCustId = getCariCustomerId(c.id);
@@ -3780,6 +3756,7 @@ function foSaveCollection() {
     id:uid(), customerId:cariCustId, sourceCustomerId:c.id, date:foDate, type:'alim',
     description:'Alım: '+receiptNo+' ('+qty+' kg)'+(cariCustId!==c.id?' ['+c.name+']':''), borc:subtotal, alacak:0
   });
+  saveToFirebase('cariTransactions', APP.data.cariTransactions[APP.data.cariTransactions.length-1]);
 
   saveData();
 
@@ -3889,6 +3866,7 @@ function foSaveNotCollected() {
   };
 
   APP.data.visits.push(visit);
+  saveToFirebase('visits', visit);
 
   // Update customer next visit based on fill level
   const custIdx = APP.data.customers.findIndex(x=>x.id===c.id);
@@ -3902,6 +3880,7 @@ function foSaveNotCollected() {
       baseDate.setDate(baseDate.getDate() - (c.period - adjustedDays));
       APP.data.customers[custIdx].lastVisit = baseDate.toISOString().split('T')[0];
     }
+    saveToFirebase('customers', APP.data.customers[custIdx]);
   }
 
   saveData();
@@ -3988,6 +3967,7 @@ function foSavePayment() {
     description:(foState.paymentType==='nakit'?'Nakit':foState.paymentType==='eft'?'EFT':'Yakıt Kartı')+' ödeme'+(paymentCariCustId!==c.id?' ['+c.name+']':''),
     borc:0, alacak:amount
   });
+  saveToFirebase('cariTransactions', APP.data.cariTransactions[APP.data.cariTransactions.length-1]);
 
   saveData();
   toast('💰 Ödeme kaydedildi: '+formatMoney(amount));
@@ -4096,6 +4076,7 @@ function foSaveTediye() {
     createdAt: new Date().toISOString()
   };
   APP.data.tediye.push(tediye);
+  saveToFirebase('tediye', tediye);
 
   // Auto-save person to customer if not exists
   const custIdx = APP.data.customers.findIndex(x=>x.id===c.id);
@@ -4362,6 +4343,7 @@ function saveEditVisit(id) {
     APP.data.visits[idx].fillLevel = document.getElementById('mVisFill').value;
     APP.data.visits[idx].reason = document.getElementById('mVisReason').value;
   }
+  saveToFirebase('visits', APP.data.visits[idx]);
   saveData(); closeModal(); renderVisits();
   toast('Ziyaret güncellendi');
 }
@@ -4670,10 +4652,12 @@ function saveProposal(id) {
 
   if(id) {
     const idx = APP.data.proposals.findIndex(p=>p.id===id);
-    if(idx>=0) APP.data.proposals[idx] = {...APP.data.proposals[idx], ...data};
+    if(idx>=0) { APP.data.proposals[idx] = {...APP.data.proposals[idx], ...data}; saveToFirebase('proposals', APP.data.proposals[idx]); }
     logAction('update', 'proposal', `${data.businessName} - ${data.city||''}`);
   } else {
-    APP.data.proposals.push({id:uid(), ...data, createdBy:APP.currentUser?.name, personnelName:APP.currentUser?.name});
+    const newProp = {id:uid(), ...data, createdBy:APP.currentUser?.name, personnelName:APP.currentUser?.name};
+    APP.data.proposals.push(newProp);
+    saveToFirebase('proposals', newProp);
     logAction('create', 'proposal', `${data.businessName} - ${data.city||''}`);
   }
 
@@ -5076,7 +5060,12 @@ function saveEditReceipt(id) {
     relVisit.date = APP.data.receipts[idx].date;
     relVisit.quantity = qty;
     relVisit.price = price;
+    saveToFirebase('visits', relVisit);
   }
+
+  saveToFirebase('receipts', APP.data.receipts[idx]);
+  // Sync updated cari transactions
+  APP.data.cariTransactions.filter(t => t.description?.indexOf(oldReceipt.receiptNo)!==-1).forEach(t => saveToFirebase('cariTransactions', t));
 
   saveData();
   closeModal();
@@ -5198,9 +5187,11 @@ function saveEditTediye(id) {
       t.date = newDate;
       t.alacak = newAmount;
       if(customerId) { t.customerId = getCariCustomerId(customerId); t.sourceCustomerId = customerId; }
+      saveToFirebase('cariTransactions', t);
     }
   });
 
+  saveToFirebase('tediye', APP.data.tediye[idx]);
   saveData();
   closeModal();
   renderReceipts();
@@ -6295,12 +6286,14 @@ function saveCariManual() {
   const amount = parseFloat(document.getElementById('mCariAmount').value)||0;
   if(amount<=0) { toast('Tutar girin','error'); return; }
 
-  APP.data.cariTransactions.push({
+  const manualCari = {
     id:uid(), customerId, date:document.getElementById('mCariDate').value||today(),
     type:'duzeltme', description:document.getElementById('mCariDesc').value||'Manuel düzeltme',
     borc: type==='borc'?amount:0,
     alacak: type==='alacak'?amount:0
-  });
+  };
+  APP.data.cariTransactions.push(manualCari);
+  saveToFirebase('cariTransactions', manualCari);
 
   saveData(); closeModal(); renderCariHesap();
   toast('Düzeltme kaydedildi');
@@ -6339,6 +6332,7 @@ function saveEditManualCari(id) {
   APP.data.cariTransactions[idx].description = document.getElementById('mEditCariDesc').value;
   APP.data.cariTransactions[idx].borc = type==='borc'?amount:0;
   APP.data.cariTransactions[idx].alacak = type==='alacak'?amount:0;
+  saveToFirebase('cariTransactions', APP.data.cariTransactions[idx]);
   saveData(); closeModal(); renderCariHesap();
   toast('✅ Cari kayıt güncellendi');
 }
