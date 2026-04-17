@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="runDiagnostic()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.9</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v17.0</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -3975,6 +3975,7 @@ function foSavePayment() {
   if(receipt) {
     receipt.paymentMethods.push({type:foState.paymentType, amount});
     receipt.vade = foState.vade;
+    saveToFirebase('receipts', receipt);
   }
 
   // Cari alacak — ana firma varsa ona yazılır
@@ -4953,6 +4954,7 @@ function saveAddPayment(id) {
   if(!r.paymentMethods) r.paymentMethods = [];
   r.paymentMethods.push({type, amount});
   r.vade = 'aninda';
+  saveToFirebase('receipts', r);
 
   // Add cari alacak — ana firma varsa ona yazılır
   const addPayCariId = getCariCustomerId(r.customerId);
