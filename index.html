@@ -7318,10 +7318,9 @@ function uploadCustomerTemplate(input) {
       
       for(const ch of changes) {
         // Apply customer updates
-        if(Object.keys(ch.updates).length > 0) {
-          Object.assign(ch.cust, ch.updates);
-          writePromises.push(saveToFirebase('customers', ch.cust));
-        }
+        Object.assign(ch.cust, ch.updates);
+        // Always write to Firebase (even if updates were empty, bakiye might have changed)
+        writePromises.push(saveToFirebase('customers', ch.cust));
         
         // Handle cari bakiye
         if(ch.bakiye !== null) {
@@ -7352,19 +7351,26 @@ function uploadCustomerTemplate(input) {
       }
       
       // Wait for all writes to complete
-      await Promise.allSettled(writePromises);
+      const results = await Promise.allSettled(writePromises);
+      const succeeded = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
       
-      // Save to localStorage
+      // Save to localStorage immediately
       saveData();
       
-      // Wait 2 seconds then unblock listeners
-      setTimeout(() => {
+      // Wait for Firebase to process, then reload to verify
+      toast(`🔄 ${succeeded} yazım tamamlandı${failed ? ', '+failed+' hata' : ''}. Doğrulanıyor...`, 'info');
+      
+      setTimeout(async () => {
+        // Reload from Firebase to verify writes persisted
+        await loadFromFirestore();
         APP._isPushing = false;
         renderCustomers();
+        populateCityFilters();
         logAction('update', 'customer', `Toplu güncelleme: ${updated} bilgi, ${cariUpdated} cari devir`);
         toast(`✅ ${updated} müşteri güncellendi, ${cariUpdated} cari devir eklendi`, 'success');
         switchAdminTab('customerTemplate');
-      }, 2000);
+      }, 3000);
       
     } catch(err) {
       APP._isPushing = false;
