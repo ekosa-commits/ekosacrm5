@@ -646,7 +646,7 @@ input, select, textarea, button { font-family: var(--font); }
             <div class="sync-dot" id="syncDot"></div>
             <span id="syncText">Çevrimiçi</span>
           </div>
-          <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="(async()=>{let r=['=== Tanılama v14.6 ===','Firebase ready: '+(typeof isFirebaseReady!=='undefined'?isFirebaseReady:'TANIMSIZ'),'Online: '+navigator.onLine,'db obj: '+(typeof db),'auth obj: '+(typeof auth),'APP obj: '+(typeof APP)];try{if(typeof APP!=='undefined'&&APP.currentUser){r.push('User: '+APP.currentUser.email)}else{r.push('User: YOK')}if(typeof APP!=='undefined'&&APP.data){r.push('Local müşteri: '+APP.data.customers.length);r.push('Local araç: '+APP.data.vehicles.length);APP.data.vehicles.forEach(v=>r.push(' 🚛 '+v.plate))}}catch(e){r.push('APP err: '+e.message)}if(typeof db!=='undefined'&&db){try{await db.collection('_test').doc('p').set({t:Date.now()});r.push('✅ YAZMA OK')}catch(e){r.push('❌ YAZMA: '+e.code+' '+e.message)}try{const s=await db.collection('vehicles').get();r.push('Firebase araç: '+s.size);s.docs.forEach(d=>r.push(' 🚛 '+(d.data().plate||d.id)))}catch(e){r.push('❌ OKUMA: '+e.code+' '+e.message)}}else{r.push('db YOK - Firebase yüklenemedi!')}alert(r.join('\n'))})()" title="Firebase Tanılama">🔧</div>
+          <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="runDiagnostic()" title="Firebase Tanılama">🔧</div>
           <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.3</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -1402,10 +1402,10 @@ input, select, textarea, button { font-family: var(--font); }
 </div>
 
 <!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
 
 <!-- Chart.js -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -1436,13 +1436,29 @@ try {
   db = firebase.firestore();
   auth = firebase.auth();
   storage = firebase.storage();
-  // Enable offline persistence
-  db.enablePersistence({ synchronizeTabs: true }).catch(err => {
-    console.warn('Persistence error:', err.code);
+  
+  // Enable offline persistence (without synchronizeTabs to avoid SDK bugs)
+  db.enablePersistence().catch(err => {
+    if(err.code === 'failed-precondition') {
+      // Multiple tabs open — OK, works without persistence in other tabs
+      console.warn('Persistence: Birden fazla sekme açık, bu sekmede çevrimdışı önbellek kapalı');
+    } else if(err.code === 'unimplemented') {
+      console.warn('Persistence: Bu tarayıcı desteklemiyor');
+    } else {
+      // INTERNAL ASSERTION or other error — clear corrupted IndexedDB
+      console.error('Persistence hatası, IndexedDB temizleniyor:', err);
+      try {
+        indexedDB.databases().then(dbs => {
+          dbs.forEach(d => { if(d.name?.includes('firestore')) indexedDB.deleteDatabase(d.name); });
+        });
+      } catch(e) {}
+    }
   });
+  
   isFirebaseReady = true;
+  console.log('✅ Firebase initialized (SDK 10.14.1)');
 } catch(e) {
-  console.warn('Firebase not configured, running in demo mode');
+  console.warn('Firebase not configured, running in demo mode:', e);
 }
 
 // ============================================================
@@ -2538,6 +2554,76 @@ function toggleMoreMenu() {
 // ============================================================
 // SYNC STATUS
 // ============================================================
+async function runDiagnostic() {
+  const r = ['=== Ekosa CRM Tanılama v16.3 ==='];
+  r.push('Firebase ready: ' + isFirebaseReady);
+  r.push('Online: ' + navigator.onLine);
+  r.push('SDK: 10.14.1');
+  r.push('db: ' + (typeof db));
+  try {
+    if(APP?.currentUser) r.push('User: ' + APP.currentUser.email + ' (' + APP.currentUser.role + ')');
+    else r.push('User: YOK');
+    if(APP?.data) {
+      r.push('Local müşteri: ' + APP.data.customers.length);
+      r.push('Local ziyaret: ' + APP.data.visits.length);
+      r.push('Local makbuz: ' + APP.data.receipts.length);
+      r.push('Local cari: ' + APP.data.cariTransactions.length);
+      r.push('Local araç: ' + APP.data.vehicles.length);
+      APP.data.vehicles.forEach(v => r.push(' 🚛 ' + v.plate + ' (' + (v.stock||0) + ' kg)'));
+    }
+  } catch(e) { r.push('APP err: ' + e.message); }
+  
+  if(db) {
+    try {
+      await db.collection('_test').doc('diag').set({t: Date.now()});
+      r.push('✅ YAZMA OK');
+      await db.collection('_test').doc('diag').delete();
+    } catch(e) {
+      r.push('❌ YAZMA: ' + (e.code||'') + ' ' + e.message);
+      if(e.message?.includes('INTERNAL ASSERTION')) {
+        r.push('');
+        r.push('⚠️ IndexedDB bozulmuş olabilir.');
+        r.push('Çözüm: Tarayıcı ayarlarından site');
+        r.push('verilerini temizleyin veya aşağıdaki');
+        r.push('"Önbellek Temizle" butonunu kullanın.');
+      }
+    }
+    try {
+      const cs = await db.collection('customers').get();
+      r.push('Firebase müşteri: ' + cs.size);
+      const vs = await db.collection('vehicles').get();
+      r.push('Firebase araç: ' + vs.size);
+      vs.docs.forEach(d => r.push(' 🚛 ' + (d.data().plate||d.id)));
+      const vis = await db.collection('visits').get();
+      r.push('Firebase ziyaret: ' + vis.size);
+    } catch(e) {
+      r.push('❌ OKUMA: ' + (e.code||'') + ' ' + e.message);
+    }
+  } else {
+    r.push('db YOK — Firebase yüklenemedi!');
+  }
+  
+  r.push('');
+  r.push('Sync OK: ' + _syncStats.ok + ' | Fail: ' + _syncStats.fail);
+  r.push('Queue: ' + _syncQueue.length + ' bekleyen');
+  if(_syncStats.lastSync) r.push('Son sync: ' + _syncStats.lastSync.toLocaleString('tr-TR'));
+  
+  const action = confirm(r.join('\n') + '\n\n[Tamam] = Önbellek temizle ve yenile\n[İptal] = Kapat');
+  if(action) {
+    // Clear IndexedDB
+    try {
+      const dbs = await indexedDB.databases();
+      for(const d of dbs) {
+        if(d.name?.includes('firestore') || d.name?.includes('firebase')) {
+          indexedDB.deleteDatabase(d.name);
+        }
+      }
+    } catch(e) {}
+    toast('🔄 Önbellek temizlendi, sayfa yenileniyor...', 'info');
+    setTimeout(() => location.reload(), 1500);
+  }
+}
+
 function updateSyncStatus() {
   const dot = document.getElementById('syncDot');
   const text = document.getElementById('syncText');
