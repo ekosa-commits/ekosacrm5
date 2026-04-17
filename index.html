@@ -4106,6 +4106,7 @@ function foSaveTediye() {
     const existing = APP.data.customers[custIdx].paymentPersons.find(p => p.name===name && p.tc===tc);
     if(!existing && name) {
       APP.data.customers[custIdx].paymentPersons.push({name, tc});
+      saveToFirebase('customers', APP.data.customers[custIdx]);
     }
   }
 
@@ -5702,12 +5703,16 @@ function renderVehicles() {
     const todayRecs = APP.data.receipts.filter(r=>r.vehicleId===v.id && r.date===todayStr);
     const todayKg = todayRecs.reduce((s,r)=>s+r.quantity,0);
     const todayAmt = todayRecs.reduce((s,r)=>s+(r.total||0),0);
-    // Avg price calculation: nakit=same, yakıt/fatura=%20 düş
+    // Avg price calculation: only current stock (since last emptying), KDV: /1.20
+    const lastEmpty = APP.data.depotEntries
+      .filter(e => e.vehiclePlate === v.plate || e.vehicleId === v.id)
+      .sort((a,b) => (b.date||b.createdAt||'').localeCompare(a.date||a.createdAt||''))[0];
+    const lastEmptyDate = lastEmpty ? (lastEmpty.date || lastEmpty.createdAt?.split('T')[0] || '') : '';
     let adjTotal=0, adjKg=0;
-    const allVehRecs = APP.data.receipts.filter(r=>r.vehicleId===v.id);
-    allVehRecs.forEach(r => {
+    const currentVehRecs = APP.data.receipts.filter(r=>r.vehicleId===v.id && (!lastEmptyDate || r.date > lastEmptyDate || (r.date === lastEmptyDate && (r.createdAt||'') > (lastEmpty.createdAt||''))));
+    currentVehRecs.forEach(r => {
       const isYakit = r.priceType==='yakit_karti' || r.priceType==='fatura' || r.paymentMethods?.some(pm=>pm.type==='yakit_karti');
-      adjTotal += isYakit ? r.total*0.8 : r.total;
+      adjTotal += isYakit ? r.total/1.20 : r.total;
       adjKg += r.quantity;
     });
     const avgPrice = adjKg > 0 ? adjTotal/adjKg : 0;
@@ -5735,38 +5740,50 @@ function renderVehicles() {
 function showVehicleDetail(vehicleId) {
   const v = APP.data.vehicles.find(x=>x.id===vehicleId);
   if(!v) return;
+  
+  // Find last emptying date for this vehicle
+  const lastEmpty = APP.data.depotEntries
+    .filter(e => e.vehiclePlate === v.plate || e.vehicleId === vehicleId)
+    .sort((a,b) => (b.date||b.createdAt||'').localeCompare(a.date||a.createdAt||''))[0];
+  const lastEmptyDate = lastEmpty ? (lastEmpty.date || lastEmpty.createdAt?.split('T')[0] || '') : '';
+  
+  // Only show receipts AFTER last emptying (current stock contents)
+  const currentRecs = APP.data.receipts
+    .filter(r => r.vehicleId === vehicleId && (!lastEmptyDate || r.date > lastEmptyDate || (r.date === lastEmptyDate && (r.createdAt||'') > (lastEmpty.createdAt||''))))
+    .sort((a,b) => (b.date||'').localeCompare(a.date||''));
+  
   const todayStr = today();
-  const todayRecs = APP.data.receipts.filter(r=>r.vehicleId===vehicleId && r.date===todayStr);
-  const allRecs = APP.data.receipts.filter(r=>r.vehicleId===vehicleId).sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-
-  // Avg price with nakit/yakıt adjustment
+  const todayRecs = currentRecs.filter(r => r.date === todayStr);
+  
+  // Avg price with KDV adjustment — only for current stock
   let adjTotal=0, adjKg=0;
-  allRecs.forEach(r => {
+  currentRecs.forEach(r => {
     const isYakit = r.priceType==='yakit_karti' || r.priceType==='fatura' || r.paymentMethods?.some(pm=>pm.type==='yakit_karti');
-    adjTotal += isYakit ? r.total*0.8 : r.total;
+    adjTotal += isYakit ? r.total/1.20 : r.total;
     adjKg += r.quantity;
   });
   const avgPrice = adjKg > 0 ? adjTotal/adjKg : 0;
 
   const todayList = todayRecs.map(r => {
     const isYakit = r.priceType==='yakit_karti' || r.priceType==='fatura' || r.paymentMethods?.some(pm=>pm.type==='yakit_karti');
-    const adjPrice = isYakit ? r.unitPrice*0.8 : r.unitPrice;
+    const adjPrice = isYakit ? r.unitPrice/1.20 : r.unitPrice;
     return `<tr><td>${r.customerName}</td><td>${r.quantity} kg</td><td>${formatMoney(r.unitPrice)}/kg</td><td>${isYakit?formatMoney(adjPrice)+'/kg':'-'}</td><td>${formatMoney(r.total)}</td></tr>`;
   }).join('');
 
-  // All collections grouped by date (last 30 days)
-  const last30 = allRecs.slice(0, 100);
+  // Group current stock receipts by date
   const dateGroups = {};
-  last30.forEach(r => {
+  currentRecs.forEach(r => {
     if(!dateGroups[r.date]) dateGroups[r.date] = [];
     dateGroups[r.date].push(r);
   });
-  const allList = Object.entries(dateGroups).sort((a,b)=>b[0].localeCompare(a[0])).map(([date, recs]) => {
+  const stockList = Object.entries(dateGroups).sort((a,b)=>b[0].localeCompare(a[0])).map(([date, recs]) => {
     const dayKg = recs.reduce((s,r)=>s+r.quantity,0);
     const dayAmt = recs.reduce((s,r)=>s+(r.total||0),0);
     return `<tr style="background:var(--bg);font-weight:600;"><td colspan="4">📅 ${formatDate(date)} — ${recs.length} alım</td><td>${formatKg(dayKg)}</td><td>${formatMoney(dayAmt)}</td></tr>` +
       recs.map(r => `<tr><td></td><td colspan="2">${r.customerName||'-'}</td><td>${formatMoney(r.unitPrice)}/kg</td><td>${r.quantity} kg</td><td>${formatMoney(r.total)}</td></tr>`).join('');
   }).join('');
+
+  const hasStock = (v.stock||0) > 0;
 
   const body = `
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
@@ -5774,27 +5791,31 @@ function showVehicleDetail(vehicleId) {
         <div style="font-size:18px;font-weight:700;color:var(--accent);">${formatKg(v.stock||0)}</div>
         <div style="font-size:11px;color:var(--text-secondary);">Araçta Stok</div>
       </div>
-      <div style="text-align:center;padding:12px;background:var(--bg);border-radius:var(--radius-sm);">
+      ${hasStock ? `<div style="text-align:center;padding:12px;background:var(--bg);border-radius:var(--radius-sm);">
         <div style="font-size:18px;font-weight:700;color:var(--info);">${formatMoney(avgPrice)}/kg</div>
         <div style="font-size:11px;color:var(--text-secondary);">Ort. Alış Fiyatı</div>
       </div>
       <div style="text-align:center;padding:12px;background:var(--bg);border-radius:var(--radius-sm);">
         <div style="font-size:18px;font-weight:700;">${formatKg(adjKg)}</div>
-        <div style="font-size:11px;color:var(--text-secondary);">Toplam Alım</div>
-      </div>
+        <div style="font-size:11px;color:var(--text-secondary);">Mevcut Yük</div>
+      </div>` : `<div style="text-align:center;padding:12px;background:var(--bg);border-radius:var(--radius-sm);grid-column:span 2;">
+        <div style="font-size:14px;color:var(--text-light);">Araçta yağ yok</div>
+      </div>`}
     </div>
+    ${hasStock ? `
     <h4 style="font-size:13px;margin-bottom:8px;">📅 Bugünkü Alımlar (${todayRecs.length})</h4>
     ${todayRecs.length ? `<div class="data-table-wrap"><table class="data-table">
       <thead><tr><th>İşletme</th><th>Miktar</th><th>Fiyat</th><th>Düz. Fiyat</th><th>Tutar</th></tr></thead>
       <tbody>${todayList}</tbody>
       <tfoot><tr style="font-weight:700;background:var(--bg);"><td>TOPLAM</td><td>${todayRecs.reduce((s,r)=>s+r.quantity,0)} kg</td><td colspan="2"></td><td>${formatMoney(todayRecs.reduce((s,r)=>s+(r.total||0),0))}</td></tr></tfoot>
     </table></div>` : '<div style="color:var(--text-light);font-size:13px;">Bugün alım yok</div>'}
-    <h4 style="font-size:13px;margin:16px 0 8px;">📋 Tüm Alım Geçmişi (Son ${last30.length} kayıt)</h4>
-    ${last30.length ? `<div class="data-table-wrap" style="max-height:300px;overflow-y:auto;"><table class="data-table">
+    <h4 style="font-size:13px;margin:16px 0 8px;">📋 Araçtaki Yağın Detayı (${currentRecs.length} alım)</h4>
+    ${currentRecs.length ? `<div class="data-table-wrap" style="max-height:300px;overflow-y:auto;"><table class="data-table">
       <thead><tr><th></th><th colspan="2">İşletme</th><th>Fiyat</th><th>Miktar</th><th>Tutar</th></tr></thead>
-      <tbody>${allList}</tbody>
+      <tbody>${stockList}</tbody>
     </table></div>` : '<div style="color:var(--text-light);font-size:13px;">Alım kaydı yok</div>'}
-    <div style="font-size:10px;color:var(--text-light);margin-top:12px;">* Düz. Fiyat: Yakıt kartı/faturalı alımlarda %20 düşülmüş fiyat</div>
+    <div style="font-size:10px;color:var(--text-light);margin-top:12px;">* Düz. Fiyat: Yakıt kartı/faturalı alımlarda KDV düşülmüş fiyat (÷1.20)</div>
+    ` : '<div style="color:var(--text-light);font-size:13px;padding:20px 0;text-align:center;">Araçta atık yağ bulunmuyor. Son boşaltım: ${lastEmptyDate ? formatDate(lastEmptyDate) : "Kayıt yok"}</div>'}
   `;
   openModal('🚛 '+v.plate+' — Araç Detay', body, '<button class="btn btn-secondary" onclick="closeModal()">Kapat</button>', '700px');
 }
@@ -6016,17 +6037,24 @@ function deleteDepotExit(id) {
 function deleteDepotEntry(id) {
   const entry = APP.data.depotEntries.find(e=>e.id===id);
   if(!entry) return;
-  if(!confirm(`${entry.vehiclePlate} aracından ${formatKg(entry.quantity)} giriş kaydını silmek istiyor musunuz?\n\nDepo stoktan düşülecek.`)) return;
+  if(!confirm(`${entry.vehiclePlate} aracından ${formatKg(entry.quantity)} giriş kaydını silmek istiyor musunuz?\n\nDepo stoktan düşülecek, araç stoğuna geri yüklenecek.`)) return;
   // Reverse depot stock
   const depot = APP.data.depots[0];
   if(depot) {
     depot.stock = Math.max(0, (depot.stock||0) - entry.quantity);
     depot.totalCost = Math.max(0, (depot.totalCost||0) - (entry.cost||0));
+    saveToFirebase('depots', depot);
+  }
+  // Restore vehicle stock
+  const vehicle = APP.data.vehicles.find(v => v.plate === entry.vehiclePlate || v.id === entry.vehicleId);
+  if(vehicle) {
+    vehicle.stock = (vehicle.stock||0) + entry.quantity;
+    saveToFirebase('vehicles', vehicle);
   }
   APP.data.depotEntries = APP.data.depotEntries.filter(e=>e.id!==id);
   deleteFromFirestore('depotEntries', id);
   saveData(); renderDepot();
-  toast('Depo giriş kaydı silindi');
+  toast('Depo giriş kaydı silindi — araç stoğuna geri yüklendi');
 }
 
 // ============================================================
