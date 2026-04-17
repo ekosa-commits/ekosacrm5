@@ -1,5 +1,6 @@
-const CACHE_NAME = 'ekosa-crm-v5.1';
-const urlsToCache = [
+// Ekosa CRM Service Worker v16.5
+const CACHE_NAME = 'ekosa-crm-v16';
+const ASSETS = [
   './',
   './index.html',
   './manifest.json',
@@ -7,15 +8,15 @@ const urlsToCache = [
   './icon-512.png'
 ];
 
-// Install
+// Install — cache core assets
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
+    caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS))
   );
   self.skipWaiting();
 });
 
-// Activate - clean old caches
+// Activate — clean old caches
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(keys => 
@@ -25,16 +26,17 @@ self.addEventListener('activate', event => {
   self.clients.claim();
 });
 
-// Fetch - network first, fallback to cache
+// Fetch — network first, cache fallback
 self.addEventListener('fetch', event => {
   // Skip non-GET and Firebase/external requests
-  if (event.request.method !== 'GET') return;
+  if(event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
-  if (url.origin !== location.origin) return;
-
+  if(url.origin !== self.location.origin) return;
+  
   event.respondWith(
     fetch(event.request)
       .then(response => {
+        // Update cache with fresh version
         const clone = response.clone();
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         return response;

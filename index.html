@@ -1436,29 +1436,19 @@ try {
   db = firebase.firestore();
   auth = firebase.auth();
   storage = firebase.storage();
-  
-  // Enable offline persistence (without synchronizeTabs to avoid SDK bugs)
-  db.enablePersistence().catch(err => {
-    if(err.code === 'failed-precondition') {
-      // Multiple tabs open — OK, works without persistence in other tabs
-      console.warn('Persistence: Birden fazla sekme açık, bu sekmede çevrimdışı önbellek kapalı');
-    } else if(err.code === 'unimplemented') {
-      console.warn('Persistence: Bu tarayıcı desteklemiyor');
-    } else {
-      // INTERNAL ASSERTION or other error — clear corrupted IndexedDB
-      console.error('Persistence hatası, IndexedDB temizleniyor:', err);
-      try {
-        indexedDB.databases().then(dbs => {
-          dbs.forEach(d => { if(d.name?.includes('firestore')) indexedDB.deleteDatabase(d.name); });
-        });
-      } catch(e) {}
-    }
-  });
-  
+  // NO enablePersistence — localStorage handles offline, IndexedDB causes corruption bugs
   isFirebaseReady = true;
-  console.log('✅ Firebase initialized (SDK 10.14.1)');
+  console.log('✅ Firebase initialized (SDK 10.14.1, no persistence)');
 } catch(e) {
-  console.warn('Firebase not configured, running in demo mode:', e);
+  console.warn('Firebase init error:', e);
+}
+
+// Timeout wrapper for Firebase operations (prevents infinite hang)
+function fbTimeout(promise, ms=8000) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Firebase timeout ('+ms+'ms)')), ms))
+  ]);
 }
 
 // ============================================================
@@ -1994,18 +1984,17 @@ function saveData() {
   syncSettings();
 }
 
-// DIRECT: Write single item to Firebase (instant — 1 document)
+// Write a single item to Firebase immediately
 function saveToFirebase(col, item) {
   if(!isFirebaseReady || !APP.currentUser || !item?.id) return;
-  db.collection(col).doc(item.id).set(sanitize(item)).then(() => {
-    _syncStats.ok++;
-    _syncStats.lastSync = new Date();
-    updateSyncBadge('ok');
-  }).catch(e => {
-    _syncStats.fail++;
-    console.error('❌ Firebase:', col, item.id, e.message);
-    updateSyncBadge('error');
-  });
+  updateSyncBadge('syncing');
+  fbTimeout(db.collection(col).doc(item.id).set(sanitize(item)), 5000)
+    .then(() => { _syncStats.ok++; _syncStats.lastSync = new Date(); updateSyncBadge('ok'); })
+    .catch(e => { 
+      _syncStats.fail++; 
+      console.error('❌ fireSync:', col, item.id, e.message);
+      updateSyncBadge('error');
+    });
 }
 
 // DIRECT: Write multiple items
@@ -2178,11 +2167,11 @@ async function syncToFirestore() {
 }
 
 async function deleteFromFirestore(collection, id) {
-  if(!isFirebaseReady) return;
+  if(!isFirebaseReady || !id) return;
   try {
-    await db.collection(collection).doc(id).delete();
+    await fbTimeout(db.collection(collection).doc(id).delete(), 5000);
   } catch(e) {
-    console.warn('Firestore delete error:', collection, id, e);
+    console.warn('Delete error:', collection, id, e.message);
   }
 }
 
@@ -2553,10 +2542,10 @@ function toggleMoreMenu() {
 // SYNC STATUS
 // ============================================================
 async function runDiagnostic() {
-  const r = ['=== Ekosa CRM Tanılama v16.3 ==='];
+  const r = ['=== Ekosa CRM Tanılama v16.5 ==='];
   r.push('Firebase ready: ' + isFirebaseReady);
   r.push('Online: ' + navigator.onLine);
-  r.push('SDK: 10.14.1');
+  r.push('SDK: 10.14.1 (no persistence)');
   r.push('db: ' + (typeof db));
   try {
     if(APP?.currentUser) r.push('User: ' + APP.currentUser.email + ' (' + APP.currentUser.role + ')');
@@ -2572,30 +2561,22 @@ async function runDiagnostic() {
   } catch(e) { r.push('APP err: ' + e.message); }
   
   if(db) {
+    // Test WRITE with timeout
     try {
-      await db.collection('_test').doc('diag').set({t: Date.now()});
+      await fbTimeout(db.collection('_test').doc('diag').set({t: Date.now()}), 5000);
       r.push('✅ YAZMA OK');
-      await db.collection('_test').doc('diag').delete();
+      await fbTimeout(db.collection('_test').doc('diag').delete(), 3000);
     } catch(e) {
-      r.push('❌ YAZMA: ' + (e.code||'') + ' ' + e.message);
-      if(e.message?.includes('INTERNAL ASSERTION')) {
-        r.push('');
-        r.push('⚠️ IndexedDB bozulmuş olabilir.');
-        r.push('Çözüm: Tarayıcı ayarlarından site');
-        r.push('verilerini temizleyin veya aşağıdaki');
-        r.push('"Önbellek Temizle" butonunu kullanın.');
-      }
+      r.push('❌ YAZMA: ' + e.message);
     }
+    // Test READ with timeout
     try {
-      const cs = await db.collection('customers').get();
+      const cs = await fbTimeout(db.collection('customers').get(), 5000);
       r.push('Firebase müşteri: ' + cs.size);
-      const vs = await db.collection('vehicles').get();
-      r.push('Firebase araç: ' + vs.size);
-      vs.docs.forEach(d => r.push(' 🚛 ' + (d.data().plate||d.id)));
-      const vis = await db.collection('visits').get();
+      const vis = await fbTimeout(db.collection('visits').get(), 5000);
       r.push('Firebase ziyaret: ' + vis.size);
     } catch(e) {
-      r.push('❌ OKUMA: ' + (e.code||'') + ' ' + e.message);
+      r.push('❌ OKUMA: ' + e.message);
     }
   } else {
     r.push('db YOK — Firebase yüklenemedi!');
@@ -2603,12 +2584,10 @@ async function runDiagnostic() {
   
   r.push('');
   r.push('Sync OK: ' + _syncStats.ok + ' | Fail: ' + _syncStats.fail);
-  r.push('Queue: ' + _syncQueue.length + ' bekleyen');
   if(_syncStats.lastSync) r.push('Son sync: ' + _syncStats.lastSync.toLocaleString('tr-TR'));
   
-  const action = confirm(r.join('\n') + '\n\n[Tamam] = Önbellek temizle ve yenile\n[İptal] = Kapat');
+  const action = confirm(r.join('\n') + '\n\n[Tamam] = IndexedDB temizle ve yenile\n[İptal] = Kapat');
   if(action) {
-    // Clear IndexedDB
     try {
       const dbs = await indexedDB.databases();
       for(const d of dbs) {
@@ -2617,7 +2596,7 @@ async function runDiagnostic() {
         }
       }
     } catch(e) {}
-    toast('🔄 Önbellek temizlendi, sayfa yenileniyor...', 'info');
+    toast('🔄 Önbellek temizlendi, yenileniyor...', 'info');
     setTimeout(() => location.reload(), 1500);
   }
 }
