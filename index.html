@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="runDiagnostic()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.8</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.9</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -7249,7 +7249,7 @@ function uploadCustomerTemplate(input) {
   if(!file) return;
   
   const reader = new FileReader();
-  reader.onload = (e) => {
+  reader.onload = async (e) => {
     try {
       const wb = XLSX.read(e.target.result, {type:'array'});
       const ws = wb.Sheets['Müşteriler'] || wb.Sheets[wb.SheetNames[0]];
@@ -7257,7 +7257,9 @@ function uploadCustomerTemplate(input) {
       
       if(!rows.length) { toast('Dosyada veri bulunamadı','error'); return; }
       
+      // First pass: analyze changes without applying
       let matched = 0, updated = 0, cariUpdated = 0, notFound = 0;
+      const changes = []; // {cust, updates, bakiye}
       
       rows.forEach(row => {
         const id = String(row['ID']||'').trim();
@@ -7270,80 +7272,102 @@ function uploadCustomerTemplate(input) {
         if(!cust) { notFound++; return; }
         matched++;
         
-        let changed = false;
-        
+        const updates = {};
         const nakit = parseFloat(row['Nakit Fiyat']);
-        if(!isNaN(nakit) && nakit > 0) { cust.priceNakit = nakit; cust.price = nakit; changed = true; }
-        
+        if(!isNaN(nakit) && nakit > 0) { updates.priceNakit = nakit; updates.price = nakit; }
         const yakit = parseFloat(row['Yakıt Kartı Fiyat']);
-        if(!isNaN(yakit) && yakit > 0) { cust.priceYakit = yakit; changed = true; }
-        
+        if(!isNaN(yakit) && yakit > 0) { updates.priceYakit = yakit; }
         const fatura = parseFloat(row['Faturalı Fiyat']);
-        if(!isNaN(fatura) && fatura > 0) { cust.priceFatura = fatura; changed = true; }
-        
+        if(!isNaN(fatura) && fatura > 0) { updates.priceFatura = fatura; }
         const fuel = String(row['Yakıt Kartı No']||'').trim();
-        if(fuel) { cust.fuelCardNo = fuel; changed = true; }
+        if(fuel) { updates.fuelCardNo = fuel; }
         
-        if(changed) updated++;
-        
-        // Handle cari bakiye (devir)
         const bakiye = parseFloat(row['Cari Bakiye']);
-        if(!isNaN(bakiye) && bakiye !== 0) {
-          // Remove old devir entries from BOTH local AND Firebase
-          const cariCustId = getCariCustomerId(cust.id);
-          const oldDevirs = APP.data.cariTransactions.filter(t => 
-            t.customerId === cariCustId && t.type === 'duzeltme' && t.description && t.description.includes('Devir')
-          );
-          // Delete from Firebase first
-          oldDevirs.forEach(t => deleteFromFirestore('cariTransactions', t.id));
-          // Then remove from local
-          APP.data.cariTransactions = APP.data.cariTransactions.filter(t => 
-            !(t.customerId === cariCustId && t.type === 'duzeltme' && t.description && t.description.includes('Devir'))
-          );
-          
-          // Add new devir entry
-          const newDevir = {
-            id: uid(),
-            customerId: cariCustId,
-            sourceCustomerId: cust.id,
-            date: '2026-01-01',
-            type: 'duzeltme',
-            description: 'Devir bakiye (Excel aktarım)',
-            borc: bakiye > 0 ? Math.abs(bakiye) : 0,
-            alacak: bakiye < 0 ? Math.abs(bakiye) : 0
-          };
-          APP.data.cariTransactions.push(newDevir);
-          saveToFirebase('cariTransactions', newDevir);
-          cariUpdated++;
+        const hasBakiye = !isNaN(bakiye) && bakiye !== 0;
+        
+        if(Object.keys(updates).length > 0) updated++;
+        if(hasBakiye) cariUpdated++;
+        
+        if(Object.keys(updates).length > 0 || hasBakiye) {
+          changes.push({ cust, updates, bakiye: hasBakiye ? bakiye : null });
         }
       });
       
       input.value = '';
       
-      if(!matched) { toast('Hiç müşteri eşleşmedi. ID ve İşletme Adı sütunlarını kontrol edin.','error'); return; }
+      if(!matched) { toast('Hiç müşteri eşleşmedi.','error'); return; }
       
       const totalChanges = updated + cariUpdated;
-      if(totalChanges === 0) {
-        alert('Dosyada değişiklik bulunamadı (tüm değerler zaten aynı veya boş).');
-        return;
-      }
+      if(totalChanges === 0) { alert('Değişiklik bulunamadı.'); return; }
       
       let msg = `📊 Yükleme Özeti:\n\n`;
       msg += `• Eşleşen: ${matched} müşteri\n`;
-      if(updated) msg += `• Bilgi güncellenen: ${updated} müşteri\n`;
-      if(cariUpdated) msg += `• Cari devir eklenen: ${cariUpdated} müşteri\n`;
+      if(updated) msg += `• Bilgi güncellenen: ${updated}\n`;
+      if(cariUpdated) msg += `• Cari devir: ${cariUpdated}\n`;
       if(notFound) msg += `• Bulunamayan: ${notFound}\n`;
       msg += `\nUygulansın mı?`;
       
       if(!confirm(msg)) return;
       
+      // Block onSnapshot during writes
+      APP._isPushing = true;
+      toast('🔄 Veriler yazılıyor, lütfen bekleyin...', 'info');
+      
+      // Second pass: apply changes and write to Firebase
+      const writePromises = [];
+      
+      for(const ch of changes) {
+        // Apply customer updates
+        if(Object.keys(ch.updates).length > 0) {
+          Object.assign(ch.cust, ch.updates);
+          writePromises.push(saveToFirebase('customers', ch.cust));
+        }
+        
+        // Handle cari bakiye
+        if(ch.bakiye !== null) {
+          const cariCustId = getCariCustomerId(ch.cust.id);
+          
+          // Delete old devirs from Firebase
+          const oldDevirs = APP.data.cariTransactions.filter(t => 
+            t.customerId === cariCustId && t.type === 'duzeltme' && t.description && t.description.includes('Devir')
+          );
+          for(const t of oldDevirs) {
+            writePromises.push(deleteFromFirestore('cariTransactions', t.id));
+          }
+          APP.data.cariTransactions = APP.data.cariTransactions.filter(t => 
+            !(t.customerId === cariCustId && t.type === 'duzeltme' && t.description && t.description.includes('Devir'))
+          );
+          
+          // Add new devir
+          const newDevir = {
+            id: uid(), customerId: cariCustId, sourceCustomerId: ch.cust.id,
+            date: '2026-01-01', type: 'duzeltme',
+            description: 'Devir bakiye (Excel aktarım)',
+            borc: ch.bakiye > 0 ? Math.abs(ch.bakiye) : 0,
+            alacak: ch.bakiye < 0 ? Math.abs(ch.bakiye) : 0
+          };
+          APP.data.cariTransactions.push(newDevir);
+          writePromises.push(saveToFirebase('cariTransactions', newDevir));
+        }
+      }
+      
+      // Wait for all writes to complete
+      await Promise.allSettled(writePromises);
+      
+      // Save to localStorage
       saveData();
-      renderCustomers();
-      logAction('update', 'customer', `Toplu güncelleme: ${updated} bilgi, ${cariUpdated} cari devir`);
-      toast(`✅ ${updated} müşteri güncellendi, ${cariUpdated} cari devir eklendi`, 'success');
-      switchAdminTab('customerTemplate');
+      
+      // Wait 2 seconds then unblock listeners
+      setTimeout(() => {
+        APP._isPushing = false;
+        renderCustomers();
+        logAction('update', 'customer', `Toplu güncelleme: ${updated} bilgi, ${cariUpdated} cari devir`);
+        toast(`✅ ${updated} müşteri güncellendi, ${cariUpdated} cari devir eklendi`, 'success');
+        switchAdminTab('customerTemplate');
+      }, 2000);
       
     } catch(err) {
+      APP._isPushing = false;
       console.error(err);
       toast('Dosya okunamadı: ' + err.message, 'error');
     }
