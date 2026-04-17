@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="runDiagnostic()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.7</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.8</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -7289,14 +7289,20 @@ function uploadCustomerTemplate(input) {
         // Handle cari bakiye (devir)
         const bakiye = parseFloat(row['Cari Bakiye']);
         if(!isNaN(bakiye) && bakiye !== 0) {
-          // Remove old devir entries for this customer
+          // Remove old devir entries from BOTH local AND Firebase
           const cariCustId = getCariCustomerId(cust.id);
+          const oldDevirs = APP.data.cariTransactions.filter(t => 
+            t.customerId === cariCustId && t.type === 'duzeltme' && t.description && t.description.includes('Devir')
+          );
+          // Delete from Firebase first
+          oldDevirs.forEach(t => deleteFromFirestore('cariTransactions', t.id));
+          // Then remove from local
           APP.data.cariTransactions = APP.data.cariTransactions.filter(t => 
             !(t.customerId === cariCustId && t.type === 'duzeltme' && t.description && t.description.includes('Devir'))
           );
           
           // Add new devir entry
-          APP.data.cariTransactions.push({
+          const newDevir = {
             id: uid(),
             customerId: cariCustId,
             sourceCustomerId: cust.id,
@@ -7305,8 +7311,9 @@ function uploadCustomerTemplate(input) {
             description: 'Devir bakiye (Excel aktarım)',
             borc: bakiye > 0 ? Math.abs(bakiye) : 0,
             alacak: bakiye < 0 ? Math.abs(bakiye) : 0
-          });
-          saveToFirebase('cariTransactions', APP.data.cariTransactions[APP.data.cariTransactions.length-1]);
+          };
+          APP.data.cariTransactions.push(newDevir);
+          saveToFirebase('cariTransactions', newDevir);
           cariUpdated++;
         }
       });
