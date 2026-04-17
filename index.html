@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="(async()=>{let r=['=== Tanılama v14.6 ===','Firebase ready: '+(typeof isFirebaseReady!=='undefined'?isFirebaseReady:'TANIMSIZ'),'Online: '+navigator.onLine,'db obj: '+(typeof db),'auth obj: '+(typeof auth),'APP obj: '+(typeof APP)];try{if(typeof APP!=='undefined'&&APP.currentUser){r.push('User: '+APP.currentUser.email)}else{r.push('User: YOK')}if(typeof APP!=='undefined'&&APP.data){r.push('Local müşteri: '+APP.data.customers.length);r.push('Local araç: '+APP.data.vehicles.length);APP.data.vehicles.forEach(v=>r.push(' 🚛 '+v.plate))}}catch(e){r.push('APP err: '+e.message)}if(typeof db!=='undefined'&&db){try{await db.collection('_test').doc('p').set({t:Date.now()});r.push('✅ YAZMA OK')}catch(e){r.push('❌ YAZMA: '+e.code+' '+e.message)}try{const s=await db.collection('vehicles').get();r.push('Firebase araç: '+s.size);s.docs.forEach(d=>r.push(' 🚛 '+(d.data().plate||d.id)))}catch(e){r.push('❌ OKUMA: '+e.code+' '+e.message)}}else{r.push('db YOK - Firebase yüklenemedi!')}alert(r.join('\n'))})()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.2</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.3</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -1955,14 +1955,18 @@ function getRemainingText(days) {
 // ============================================================
 let _lastSynced = {}; // Shadow copy: { collectionName: { itemId: jsonString } }
 
+let _syncQueue = []; // Failed writes queue for retry
+let _syncStats = { ok: 0, fail: 0, lastSync: null };
+
 function saveData() {
   localStorage.setItem('ekosa_crm_v14', JSON.stringify(APP.data));
-  if(!isFirebaseReady || !APP.currentUser) return;
+  if(!isFirebaseReady || !APP.currentUser) { updateSyncBadge('offline'); return; }
 
   // Auto-detect changed items and sync only those
   const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
     'urgentRequests','notes','licenses','depots','facilities','depotExits','depotEntries','cariTransactions','actionLog'];
   
+  let writeCount = 0;
   for(const col of collections) {
     const items = APP.data[col];
     if(!items || !Array.isArray(items)) continue;
@@ -1972,19 +1976,112 @@ function saveData() {
       if(!item?.id) continue;
       const json = JSON.stringify(item);
       if(_lastSynced[col][item.id] !== json) {
+        writeCount++;
         // Changed or new — sync immediately
-        db.collection(col).doc(item.id).set(item).catch(e => console.warn('⚠️ sync:', col, e));
-        _lastSynced[col][item.id] = json;
+        db.collection(col).doc(item.id).set(item).then(() => {
+          _syncStats.ok++;
+          _lastSynced[col][item.id] = json;
+          _syncStats.lastSync = new Date();
+          updateSyncBadge('ok');
+        }).catch(e => {
+          _syncStats.fail++;
+          console.error('❌ Firebase yazma hatası:', col, item.id, e);
+          // Add to retry queue
+          _syncQueue.push({ col, item: {...item}, retries: 0 });
+          updateSyncBadge('error');
+        });
       }
     }
   }
+  if(writeCount > 0) {
+    updateSyncBadge('syncing');
+    console.log('🔄 Firebase sync: ' + writeCount + ' öğe yazılıyor...');
+  }
   syncSettings();
+}
+
+function updateSyncBadge(status) {
+  const dot = document.getElementById('syncDot');
+  const text = document.getElementById('syncText');
+  if(!dot || !text) return;
+  if(status === 'ok') { dot.style.background = '#4CAF50'; text.textContent = '🟢 Senkron'; }
+  else if(status === 'syncing') { dot.style.background = '#FFC107'; text.textContent = '🔄 Yazılıyor...'; }
+  else if(status === 'error') { dot.style.background = '#F44336'; text.textContent = '🔴 Hata!'; }
+  else if(status === 'offline') { dot.style.background = '#9E9E9E'; text.textContent = '⚪ Çevrimdışı'; }
+}
+
+// Force re-sync: pull from Firebase + push local changes
+async function forceSync() {
+  if(!isFirebaseReady) { toast('Firebase bağlantısı yok','error'); return; }
+  toast('🔄 Manuel senkronizasyon başlatılıyor...','info');
+  updateSyncBadge('syncing');
+  
+  try {
+    // 1. Test Firebase connection
+    await db.collection('_test').doc('sync').set({ts: Date.now(), user: APP.currentUser?.name||'?'});
+    await db.collection('_test').doc('sync').delete();
+    
+    // 2. Pull latest from Firebase
+    await loadFromFirestore();
+    
+    // 3. Push all local data to Firebase (batch write)
+    await syncToFirestore();
+    
+    // 4. Retry failed writes
+    if(_syncQueue.length > 0) {
+      const queue = [..._syncQueue];
+      _syncQueue = [];
+      for(const q of queue) {
+        try {
+          await db.collection(q.col).doc(q.item.id).set(q.item);
+          _syncStats.ok++;
+        } catch(e) {
+          if(q.retries < 3) { q.retries++; _syncQueue.push(q); }
+          _syncStats.fail++;
+        }
+      }
+    }
+    
+    // 5. Refresh UI
+    populateCityFilters();
+    refreshCurrentPage();
+    
+    _syncStats.lastSync = new Date();
+    updateSyncBadge('ok');
+    toast('✅ Senkronizasyon tamamlandı — ' + APP.data.customers.length + ' müşteri, ' + APP.data.visits.length + ' ziyaret', 'success');
+  } catch(e) {
+    console.error('Force sync error:', e);
+    updateSyncBadge('error');
+    toast('❌ Senkronizasyon hatası: ' + e.message, 'error');
+  }
+}
+
+// Periodic background sync — every 2 minutes pull latest from Firebase
+let _periodicSyncTimer = null;
+function startPeriodicSync() {
+  if(_periodicSyncTimer) clearInterval(_periodicSyncTimer);
+  _periodicSyncTimer = setInterval(async () => {
+    if(!isFirebaseReady || !APP.currentUser) return;
+    if(document.hidden) return; // Don't sync if tab is hidden
+    try {
+      await loadFromFirestore();
+      // Only refresh UI if not on field ops with customer selected
+      if(!(APP.currentPage === 'fieldOps' && typeof foState !== 'undefined' && foState.selectedCustomer)) {
+        refreshCurrentPage();
+      }
+    } catch(e) { console.warn('Periodic sync error:', e); }
+  }, 2 * 60 * 1000); // 2 dakikada bir
 }
 
 // Sync a single item immediately (for direct calls)
 function syncItem(collection, item) {
   if(!isFirebaseReady || !item?.id) return;
-  db.collection(collection).doc(item.id).set(item).catch(e => console.warn('syncItem:', e));
+  db.collection(collection).doc(item.id).set(item).then(() => {
+    updateSyncBadge('ok');
+  }).catch(e => {
+    console.warn('syncItem error:', e);
+    updateSyncBadge('error');
+  });
 }
 
 // Sync settings (counters, cities, etc.)
@@ -2149,18 +2246,33 @@ function startListeners() {
     db.collection(col).onSnapshot(snap => {
       if(APP._isPushing) return; // Don't update during clearAndPush
       // Always accept the data from Firebase
-      APP.data[col] = snap.docs.map(d => ({id:d.id, ...d.data()}));
+      const newData = snap.docs.map(d => ({id:d.id, ...d.data()}));
+      const oldCount = (APP.data[col]||[]).length;
+      APP.data[col] = newData;
       // Update _lastSynced so saveData won't re-upload
       if(!_lastSynced[col]) _lastSynced[col] = {};
-      APP.data[col].forEach(item => {
+      newData.forEach(item => {
         if(item?.id) _lastSynced[col][item.id] = JSON.stringify(item);
       });
       localStorage.setItem('ekosa_crm_v14', JSON.stringify(APP.data));
+      _syncStats.lastSync = new Date();
+      updateSyncBadge('ok');
+      // Log significant changes
+      if(newData.length !== oldCount) {
+        console.log(`📡 Firebase ${col}: ${oldCount} → ${newData.length}`);
+      }
       // Skip UI refresh if user is actively entering data on field ops
       if(APP.currentPage === 'fieldOps' && typeof foState !== 'undefined' && foState.selectedCustomer) return;
       refreshCurrentPage();
-    }, err => console.warn('Listener error:', col, err));
+    }, err => {
+      console.error('❌ Listener error:', col, err);
+      updateSyncBadge('error');
+    });
   });
+  // Start periodic background sync
+  startPeriodicSync();
+  updateSyncBadge('ok');
+  console.log('✅ Firebase listeners started for', collections.length, 'collections');
 }
 
 async function clearAndPushToFirestore() {
@@ -2442,29 +2554,7 @@ function updateSyncStatus() {
 }
 
 async function manualSync() {
-  if(!isFirebaseReady || !APP.currentUser) {
-    toast('Firebase bağlantısı yok — isFirebaseReady:' + isFirebaseReady + ' user:' + !!APP.currentUser, 'error');
-    return;
-  }
-  const text = document.getElementById('syncText');
-  text.textContent = '🔄 Senkronize...';
-  try {
-    // 1. Pull latest from Firebase
-    await loadFromFirestore();
-    // 2. Push all local data to Firebase  
-    await syncToFirestore();
-    // 3. Refresh UI
-    populateCityFilters();
-    refreshCurrentPage();
-    text.textContent = '✅ Senkronize';
-    toast('✅ Firebase senkronizasyonu tamamlandı — ' + APP.data.customers.length + ' müşteri, ' + APP.data.vehicles.length + ' araç');
-    setTimeout(() => updateSyncStatus(), 3000);
-  } catch(e) {
-    console.error('Manual sync error:', e);
-    text.textContent = '❌ Hata';
-    toast('Senkronizasyon hatası: ' + e.message, 'error');
-    setTimeout(() => updateSyncStatus(), 3000);
-  }
+  await forceSync();
 }
 
 async function firebaseDiagnostic() {
