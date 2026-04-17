@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="(async()=>{let r=['=== Tanılama v14.6 ===','Firebase ready: '+(typeof isFirebaseReady!=='undefined'?isFirebaseReady:'TANIMSIZ'),'Online: '+navigator.onLine,'db obj: '+(typeof db),'auth obj: '+(typeof auth),'APP obj: '+(typeof APP)];try{if(typeof APP!=='undefined'&&APP.currentUser){r.push('User: '+APP.currentUser.email)}else{r.push('User: YOK')}if(typeof APP!=='undefined'&&APP.data){r.push('Local müşteri: '+APP.data.customers.length);r.push('Local araç: '+APP.data.vehicles.length);APP.data.vehicles.forEach(v=>r.push(' 🚛 '+v.plate))}}catch(e){r.push('APP err: '+e.message)}if(typeof db!=='undefined'&&db){try{await db.collection('_test').doc('p').set({t:Date.now()});r.push('✅ YAZMA OK')}catch(e){r.push('❌ YAZMA: '+e.code+' '+e.message)}try{const s=await db.collection('vehicles').get();r.push('Firebase araç: '+s.size);s.docs.forEach(d=>r.push(' 🚛 '+(d.data().plate||d.id)))}catch(e){r.push('❌ OKUMA: '+e.code+' '+e.message)}}else{r.push('db YOK - Firebase yüklenemedi!')}alert(r.join('\n'))})()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.1</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.2</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -2100,6 +2100,13 @@ async function loadFromFirestore() {
         APP.data[col] = snap.docs.map(d => ({id:d.id, ...d.data()}));
         hasAnyData = true;
       }
+      // Initialize _lastSynced shadow copy so saveData won't re-upload everything
+      if(APP.data[col] && Array.isArray(APP.data[col])) {
+        if(!_lastSynced[col]) _lastSynced[col] = {};
+        APP.data[col].forEach(item => {
+          if(item?.id) _lastSynced[col][item.id] = JSON.stringify(item);
+        });
+      }
     }
     const settings = await db.collection('settings').doc('app').get();
     if(settings.exists) {
@@ -2110,9 +2117,9 @@ async function loadFromFirestore() {
       if(s.cities) APP.data.cities = s.cities;
     }
     if(hasAnyData) {
-      APP._freshImport = false; // Firebase has data, no need for import
+      APP._freshImport = false;
       localStorage.setItem('ekosa_crm_v14', JSON.stringify(APP.data));
-      console.log('✅ Firebase → Local sync: ' + APP.data.customers.length + ' müşteri');
+      console.log('✅ Firebase → Local sync: ' + APP.data.customers.length + ' müşteri, _lastSynced initialized');
     }
   } catch(e) {
     console.warn('Load from Firestore error:', e);
@@ -2137,13 +2144,19 @@ function setupRealtimeListeners() {
 function startListeners() {
   if(!isFirebaseReady) return;
   const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
-    'urgentRequests','notes','licenses','depotExits','depotEntries','cariTransactions','depots','facilities'];
+    'urgentRequests','notes','licenses','depotExits','depotEntries','cariTransactions','depots','facilities','actionLog'];
   collections.forEach(col => {
     db.collection(col).onSnapshot(snap => {
       if(APP._isPushing) return; // Don't update during clearAndPush
-      // Accept the snapshot (even if empty — a deletion might have cleared it)
+      // Always accept the data from Firebase
       APP.data[col] = snap.docs.map(d => ({id:d.id, ...d.data()}));
+      // Update _lastSynced so saveData won't re-upload
+      if(!_lastSynced[col]) _lastSynced[col] = {};
+      APP.data[col].forEach(item => {
+        if(item?.id) _lastSynced[col][item.id] = JSON.stringify(item);
+      });
       localStorage.setItem('ekosa_crm_v14', JSON.stringify(APP.data));
+      // Skip UI refresh if user is actively entering data on field ops
       if(APP.currentPage === 'fieldOps' && typeof foState !== 'undefined' && foState.selectedCustomer) return;
       refreshCurrentPage();
     }, err => console.warn('Listener error:', col, err));
@@ -2156,7 +2169,7 @@ async function clearAndPushToFirestore() {
   toast('🔄 Firebase verileri güncelleniyor...', 'info');
   try {
     const collections = ['customers','visits','proposals','receipts','tediye','vehicles',
-      'urgentRequests','notes','licenses','depotExits','depotEntries','cariTransactions','depots','facilities'];
+      'urgentRequests','notes','licenses','depotExits','depotEntries','cariTransactions','depots','facilities','actionLog'];
     
     // 1. Delete all old docs
     for(const col of collections) {
