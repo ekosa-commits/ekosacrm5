@@ -647,7 +647,7 @@ input, select, textarea, button { font-family: var(--font); }
             <span id="syncText">Çevrimiçi</span>
           </div>
           <div style="cursor:pointer;font-size:16px;padding:4px;" onclick="(async()=>{let r=['=== Tanılama v14.6 ===','Firebase ready: '+(typeof isFirebaseReady!=='undefined'?isFirebaseReady:'TANIMSIZ'),'Online: '+navigator.onLine,'db obj: '+(typeof db),'auth obj: '+(typeof auth),'APP obj: '+(typeof APP)];try{if(typeof APP!=='undefined'&&APP.currentUser){r.push('User: '+APP.currentUser.email)}else{r.push('User: YOK')}if(typeof APP!=='undefined'&&APP.data){r.push('Local müşteri: '+APP.data.customers.length);r.push('Local araç: '+APP.data.vehicles.length);APP.data.vehicles.forEach(v=>r.push(' 🚛 '+v.plate))}}catch(e){r.push('APP err: '+e.message)}if(typeof db!=='undefined'&&db){try{await db.collection('_test').doc('p').set({t:Date.now()});r.push('✅ YAZMA OK')}catch(e){r.push('❌ YAZMA: '+e.code+' '+e.message)}try{const s=await db.collection('vehicles').get();r.push('Firebase araç: '+s.size);s.docs.forEach(d=>r.push(' 🚛 '+(d.data().plate||d.id)))}catch(e){r.push('❌ OKUMA: '+e.code+' '+e.message)}}else{r.push('db YOK - Firebase yüklenemedi!')}alert(r.join('\n'))})()" title="Firebase Tanılama">🔧</div>
-          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.0</div>
+          <div style="font-size:9px;color:#999;padding:2px 4px;" title="Versiyon">v16.1</div>
           <button class="theme-toggle" onclick="toggleTheme()" title="Tema Değiştir">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18" id="themeIcon"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
           </button>
@@ -7285,48 +7285,51 @@ function switchAdminTab(tab) {
   }
   else if(tab==='backup') {
     const lastBackup = localStorage.getItem('ekosa_last_backup') || 'Henüz yedeklenmedi';
-    const backupEmail = localStorage.getItem('ekosa_backup_email') || '';
-    const autoTime = localStorage.getItem('ekosa_backup_time') || '20:00';
-    const autoEnabled = localStorage.getItem('ekosa_backup_auto') === 'true';
     const dataSize = (JSON.stringify(APP.data).length / 1024).toFixed(0);
     
     content.innerHTML = `
-      <div class="widget-grid">
-        <div class="widget">
-          <div class="widget-header"><div class="widget-title">📊 Veri Durumu</div></div>
-          <div class="widget-body">
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;text-align:center;">
-              <div><div style="font-size:20px;font-weight:700;color:var(--accent);">${APP.data.customers.length}</div><div style="font-size:11px;color:var(--text-secondary);">Müşteri</div></div>
-              <div><div style="font-size:20px;font-weight:700;color:var(--info);">${APP.data.receipts.length}</div><div style="font-size:11px;color:var(--text-secondary);">Makbuz</div></div>
-              <div><div style="font-size:20px;font-weight:700;color:var(--warning);">${dataSize} KB</div><div style="font-size:11px;color:var(--text-secondary);">Veri Boyutu</div></div>
-            </div>
-            <div style="margin-top:12px;font-size:12px;color:var(--text-secondary);">Son yedekleme: <strong>${lastBackup}</strong></div>
+      <div class="widget" style="margin-top:20px;">
+        <div class="widget-header"><div class="widget-title">☁️ Otomatik Bulut Yedekleme</div></div>
+        <div class="widget-body">
+          <div style="background:#e8f5e9;border-left:4px solid #2e7d32;padding:14px 16px;border-radius:4px;margin-bottom:16px;">
+            <strong>✅ Otomatik bulut yedekleme aktif!</strong><br>
+            <span style="font-size:12px;">Uygulama açıkken günde <strong>3 kez</strong> (08:00, 13:00, 18:00) Firebase'e otomatik yedek alınır. Son 7 günlük yedekler saklanır.</span>
           </div>
+          
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px;text-align:center;margin-bottom:16px;">
+            <div style="background:var(--bg);padding:12px;border-radius:6px;">
+              <div style="font-size:20px;font-weight:700;color:var(--accent);">${APP.data.customers.length}</div>
+              <div style="font-size:10px;color:var(--text-secondary);">Müşteri</div>
+            </div>
+            <div style="background:var(--bg);padding:12px;border-radius:6px;">
+              <div style="font-size:20px;font-weight:700;color:var(--info);">${APP.data.receipts.length}</div>
+              <div style="font-size:10px;color:var(--text-secondary);">Makbuz</div>
+            </div>
+            <div style="background:var(--bg);padding:12px;border-radius:6px;">
+              <div style="font-size:20px;font-weight:700;color:var(--success);">${APP.data.cariTransactions.length}</div>
+              <div style="font-size:10px;color:var(--text-secondary);">Cari Hareket</div>
+            </div>
+            <div style="background:var(--bg);padding:12px;border-radius:6px;">
+              <div style="font-size:20px;font-weight:700;color:var(--warning);">${dataSize} KB</div>
+              <div style="font-size:10px;color:var(--text-secondary);">Toplam</div>
+            </div>
+          </div>
+          
+          <div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">Son yedekleme: <strong>${lastBackup}</strong></div>
+          
+          <button class="btn btn-primary" onclick="manualCloudBackup()" style="width:100%;padding:14px;font-size:14px;">
+            ☁️ Şimdi Bulut Yedek Al
+          </button>
         </div>
+      </div>
 
-        <div class="widget">
-          <div class="widget-header"><div class="widget-title">📧 Otomatik Yedekleme</div></div>
-          <div class="widget-body">
-            <div class="form-group">
-              <label class="form-label">Yedekleme E-posta Adresi</label>
-              <input class="form-input" id="backupEmailInput" value="${backupEmail}" placeholder="ornek@gmail.com">
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Saat</label>
-                <input class="form-input" type="time" id="backupTimeInput" value="${autoTime}">
-              </div>
-              <div class="form-group">
-                <label class="form-label">Durum</label>
-                <select class="form-select" id="backupAutoToggle">
-                  <option value="true" ${autoEnabled?'selected':''}>Aktif</option>
-                  <option value="false" ${!autoEnabled?'selected':''}>Kapalı</option>
-                </select>
-              </div>
-            </div>
-            <button class="btn btn-primary" onclick="saveBackupSettings()" style="width:100%;">💾 Ayarları Kaydet</button>
-            <div style="font-size:11px;color:var(--text-secondary);margin-top:8px;">⏰ Uygulama açıkken belirlenen saatte otomatik yedek oluşturulur ve e-posta gönderilir.</div>
-          </div>
+      <div class="widget" style="margin-top:16px;">
+        <div class="widget-header">
+          <div class="widget-title">📋 Bulut Yedek Geçmişi (Son 7 Gün)</div>
+          <button class="btn btn-sm btn-secondary" onclick="loadCloudBackupList()">🔄 Yenile</button>
+        </div>
+        <div id="backupCloudList" style="max-height:300px;overflow-y:auto;">
+          <div style="padding:16px;text-align:center;color:var(--text-light);">Yükleniyor...</div>
         </div>
       </div>
 
@@ -7334,20 +7337,15 @@ function switchAdminTab(tab) {
         <div class="widget-header"><div class="widget-title">🔧 Manuel İşlemler</div></div>
         <div class="widget-body">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-            <button class="btn btn-primary" onclick="downloadBackup()" style="padding:16px;font-size:14px;">
-              📥 JSON İndir
+            <button class="btn btn-secondary" onclick="downloadBackup()" style="padding:14px;font-size:13px;">
+              📥 JSON İndir (Dosya)
             </button>
-            <button class="btn btn-secondary" onclick="document.getElementById('backupFileInput').click()" style="padding:16px;font-size:14px;">
+            <button class="btn btn-secondary" onclick="document.getElementById('backupFileInput').click()" style="padding:14px;font-size:13px;">
               📤 JSON Yükle (Geri Yükle)
-            </button>
-            <button class="btn btn-secondary" onclick="emailBackupNow()" style="padding:16px;font-size:14px;">
-              📧 Şimdi Mail Gönder
-            </button>
-            <button class="btn btn-secondary" onclick="shareBackup()" style="padding:16px;font-size:14px;">
-              📱 Paylaş (WhatsApp vb.)
             </button>
           </div>
           <input type="file" id="backupFileInput" accept=".json" style="display:none;" onchange="restoreBackup(event)">
+          <div style="font-size:11px;color:var(--text-secondary);margin-top:8px;">JSON dosyası bilgisayarınıza indirilir. Geri yükleme için aynı dosyayı yüklersiniz.</div>
         </div>
       </div>
 
@@ -7359,6 +7357,8 @@ function switchAdminTab(tab) {
         </div>
       </div>
     `;
+    // Auto-load cloud backup list
+    setTimeout(() => loadCloudBackupList(), 500);
   }
 }
 
@@ -8561,35 +8561,192 @@ let backupTimerInterval = null;
 function scheduleAutoBackup() {
   if(backupTimerInterval) clearInterval(backupTimerInterval);
 
-  const autoEnabled = localStorage.getItem('ekosa_backup_auto') === 'true';
-  if(!autoEnabled) return;
-
-  // Check every 60 seconds if it's time to backup
+  // Always enable cloud backup — check every 5 minutes
   backupTimerInterval = setInterval(() => {
-    const targetTime = localStorage.getItem('ekosa_backup_time') || '20:00';
-    const now = new Date();
-    const currentTime = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
-    const lastAutoBackup = localStorage.getItem('ekosa_last_auto_backup_date');
-    const todayDate = today();
+    checkAndRunCloudBackup();
+  }, 5 * 60 * 1000); // 5 dakikada bir kontrol
 
-    if(currentTime === targetTime && lastAutoBackup !== todayDate) {
-      localStorage.setItem('ekosa_last_auto_backup_date', todayDate);
-      performAutoBackup();
+  // Also run on first load after 30 seconds
+  setTimeout(() => checkAndRunCloudBackup(), 30000);
+}
+
+function checkAndRunCloudBackup() {
+  if(!isFirebaseReady || !APP.currentUser) return;
+  
+  const now = new Date();
+  const hour = now.getHours();
+  const todayDate = today();
+  const lastCloudBackup = localStorage.getItem('ekosa_last_cloud_backup_date') || '';
+  const lastCloudHour = parseInt(localStorage.getItem('ekosa_last_cloud_backup_hour') || '-1');
+  
+  // Backup at 08:00, 13:00, 18:00 — 3 times a day
+  const backupHours = [8, 13, 18];
+  const shouldBackup = backupHours.some(bh => 
+    hour >= bh && (lastCloudBackup !== todayDate || lastCloudHour < bh)
+  );
+  
+  if(shouldBackup) {
+    performCloudBackup();
+  }
+}
+
+async function performCloudBackup() {
+  if(!isFirebaseReady) return;
+  
+  try {
+    const todayDate = today();
+    const now = new Date();
+    const timeStr = now.getHours().toString().padStart(2,'0') + ':' + now.getMinutes().toString().padStart(2,'0');
+    
+    // Create backup snapshot
+    const backupData = {
+      timestamp: now.toISOString(),
+      date: todayDate,
+      time: timeStr,
+      user: APP.currentUser?.name || 'Bilinmiyor',
+      stats: {
+        customers: APP.data.customers.length,
+        visits: APP.data.visits.length,
+        receipts: APP.data.receipts.length,
+        tediye: APP.data.tediye.length,
+        proposals: APP.data.proposals.length,
+        cariTransactions: APP.data.cariTransactions.length,
+        vehicles: APP.data.vehicles.length
+      },
+      data: JSON.stringify(APP.data)
+    };
+    
+    // Save to Firebase: backups/{date}_{time}
+    const backupId = todayDate + '_' + timeStr.replace(':','-');
+    await db.collection('backups').doc(backupId).set(backupData);
+    
+    // Update last backup tracking
+    localStorage.setItem('ekosa_last_cloud_backup_date', todayDate);
+    localStorage.setItem('ekosa_last_cloud_backup_hour', now.getHours().toString());
+    localStorage.setItem('ekosa_last_backup', now.toLocaleString('tr-TR'));
+    
+    // Clean up old backups — keep only last 7 days
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - 7);
+    const cutoffStr = cutoffDate.toISOString().split('T')[0];
+    
+    const oldBackups = await db.collection('backups')
+      .where('date', '<', cutoffStr)
+      .get();
+    
+    if(!oldBackups.empty) {
+      const batch = db.batch();
+      oldBackups.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      console.log(`🗑️ ${oldBackups.size} eski yedek silindi`);
     }
-  }, 60000); // Check every minute
+    
+    console.log('☁️ Otomatik bulut yedek alındı:', backupId);
+    
+  } catch(e) {
+    console.warn('Bulut yedekleme hatası:', e);
+  }
+}
+
+// Manual cloud backup from admin panel
+async function manualCloudBackup() {
+  toast('☁️ Bulut yedekleme başlatılıyor...', 'info');
+  await performCloudBackup();
+  toast('✅ Bulut yedek başarıyla alındı!', 'success');
+  if(document.getElementById('backupCloudList')) loadCloudBackupList();
+}
+
+// List cloud backups in admin panel
+async function loadCloudBackupList() {
+  const listEl = document.getElementById('backupCloudList');
+  if(!listEl || !isFirebaseReady) return;
+  
+  try {
+    const snaps = await db.collection('backups').orderBy('timestamp', 'desc').limit(21).get();
+    if(snaps.empty) {
+      listEl.innerHTML = '<div style="padding:16px;color:var(--text-light);text-align:center;">Henüz bulut yedeği yok</div>';
+      return;
+    }
+    
+    listEl.innerHTML = snaps.docs.map(doc => {
+      const d = doc.data();
+      const s = d.stats || {};
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--border);">
+        <div>
+          <div style="font-weight:600;font-size:12px;">📅 ${formatDate(d.date)} — ${d.time}</div>
+          <div style="font-size:10px;color:var(--text-light);">
+            ${s.customers||0} müşteri, ${s.receipts||0} makbuz, ${s.tediye||0} tediye, ${s.cariTransactions||0} cari | ${d.user||''}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-sm btn-secondary" onclick="downloadCloudBackup('${doc.id}')" title="JSON İndir">📥</button>
+          <button class="btn btn-sm btn-danger" onclick="restoreCloudBackup('${doc.id}')" title="Bu yedeği geri yükle">♻️</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    listEl.innerHTML = '<div style="padding:16px;color:var(--danger);">Yedekler yüklenemedi: '+e.message+'</div>';
+  }
+}
+
+async function downloadCloudBackup(id) {
+  try {
+    const doc = await db.collection('backups').doc(id).get();
+    if(!doc.exists) { toast('Yedek bulunamadı','error'); return; }
+    const data = doc.data().data;
+    const blob = new Blob([data], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ekosa_backup_'+id+'.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('📥 Yedek indirildi: '+id);
+  } catch(e) {
+    toast('İndirme hatası: '+e.message, 'error');
+  }
+}
+
+async function restoreCloudBackup(id) {
+  if(!confirm('⚠️ DİKKAT!\n\nBu yedekten geri yükleme yapılacak.\nMevcut TÜM veriler bu yedeğin tarihi itibariyle geri dönecek.\n\nDevam etmek istiyor musunuz?')) return;
+  if(!confirm('TEKRAR ONAY: Bu işlem geri alınamaz. Mevcut veriler silinecek ve yedek yüklenecek. Emin misiniz?')) return;
+  
+  try {
+    toast('♻️ Yedek geri yükleniyor...', 'info');
+    const doc = await db.collection('backups').doc(id).get();
+    if(!doc.exists) { toast('Yedek bulunamadı','error'); return; }
+    
+    const restoredData = JSON.parse(doc.data().data);
+    
+    // Preserve system counters and settings
+    const preserveKeys = ['receiptCounter', 'tediyeCounter', 'cities', 'productTypes'];
+    preserveKeys.forEach(k => {
+      if(APP.data[k] && !restoredData[k]) restoredData[k] = APP.data[k];
+    });
+    
+    APP.data = restoredData;
+    saveData();
+    
+    // Push to Firebase
+    await clearAndPushToFirestore();
+    
+    logAction('update', 'system', `Bulut yedekten geri yükleme: ${id}`);
+    toast('✅ Yedek başarıyla geri yüklendi! Sayfa yenileniyor...', 'success');
+    setTimeout(() => location.reload(), 2000);
+  } catch(e) {
+    toast('Geri yükleme hatası: '+e.message, 'error');
+  }
 }
 
 function performAutoBackup() {
+  // Also keep local download for legacy support
   const email = localStorage.getItem('ekosa_backup_email');
-  if(!email) return;
-
   toast('⏰ Otomatik yedekleme başlatılıyor...', 'info');
 
   const data = JSON.stringify(APP.data);
   const blob = new Blob([data], {type:'application/json'});
   const file = new File([blob], 'ekosa_backup_'+today()+'.json', {type:'application/json'});
 
-  // Try sharing
   if(navigator.share && navigator.canShare && navigator.canShare({files:[file]})) {
     navigator.share({
       title: 'Ekosa CRM Otomatik Yedek — '+formatDate(today()),
@@ -8599,11 +8756,9 @@ function performAutoBackup() {
       localStorage.setItem('ekosa_last_backup', new Date().toLocaleString('tr-TR'));
       toast('✅ Otomatik yedek gönderildi');
     }).catch(() => {
-      // Silently download as fallback
       downloadBackup();
     });
   } else {
-    // Auto-download
     downloadBackup();
     toast('📥 Otomatik yedek indirildi ('+formatDate(today())+')');
   }
